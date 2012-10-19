@@ -1,13 +1,18 @@
-IRC Crawling
+AnonymitySimulator with Web Crawlers
 
 Overview
 ===============================================================================
-The utilities contained here-in are used for crawling IRC and then to parse
-the resulting data set.
+This package contains both an AnonymitySimulator along with data set gathers
+for creating datasets that can be used in the AnonymitySimulator.
 
 All utilities have been built uisng Python2 and have not been tested on
-Python3. irc_crawl.py requires the Python irc package to be installed:
-http://python-irclib.sourceforge.net/
+Python3.
+
+irc_crawl.py requires the Python irc package to be installed:
+http://python-irclib.sourceforge.net
+
+twitter_crawl.py requires Python Twitter package to be installed:
+https://github.com/bear/python-twitter
 
 irc_crawl.py
 ===============================================================================
@@ -30,12 +35,38 @@ Event types (and data):
   - msg : data = (name, msg)
   - whois : data = (name, host)
 
-irc_parse.py
+twitter_crawl.py
 ===============================================================================
-python2 irc_parse.py [--input=data] [--debug]
-  input - Where the crawled data is
+python2 twitter_crawl.py --consumer_key= --consumer_secret=
+                         --access_token_key= --access_token_secret=
+                         [--output=data] [--min_followers=1000000] [--debug]
+  consumer_key - A user's consumer key
+  consumer_secret - A user's consumer secret
+  access_token_key - OAuth access token key
+  access_token_key - OAuth access token secret
+  output - Where to store the crawl data upon completion
+  min_followers - FOllow a user with at least this many followers
   debug - Print debug (output information)
 
-anon_sim.py
+The data will be stored in a pickled dictionary containing two lists:
+"statuses" - the list of statuses
+"userids" - the list of followed userids
+
+main.py
 ===============================================================================
-Class library for evaluating anonymity sets over a data set
+Brings together the parsing engines and the AnonymitySimulator to evaluate
+the data set for the effects on churn over time on the anonymity set.
+
+python2 main.py [--input=data] [--type=irc] [--min_anon=0] [--debug]
+  input - Where the crawled data is
+  type - the parsing engine to use for the dataset
+  min_anon - the minimum anonymity as an integer allowed before the system
+    would automatically ignore future messages coming from that slot
+  debug - Print debug (output information)
+
+Parsers: irc
+
+Other files
+===============================================================================
+irc_parse.py - Contains the Irc parser
+anon_sim.py - Class library for evaluating anonymity sets over a data set
