@@ -1,30 +1,9 @@
 #!/usr/bin/python2
 
-"""Reads the output of irc_crawl.py as input into a system that evaluates
-a users anonymity set over the data set."""
+"""Parses a set of Irc events and converts it into a data set for the
+AnonymitySimulator."""
 
-import codecs
-import getopt
 import logging
-import pickle
-import sys
-
-from anon_sim import AnonymitySimulator
-
-sys.stdout = codecs.getwriter('utf8')(sys.stdout)
-
-optlist, args = getopt.getopt(sys.argv[1:], "", ["input=", "debug"])
-optdict = {}
-for k,v in optlist:
-  optdict[k] = v
-
-datain = optdict.get("--input", "data")
-if "--debug" in optdict:
-  logging.basicConfig(level=logging.WARN)
-
-f = open(datain, "rb")
-events = pickle.load(f)
-f.close()
 
 class IrcParse:
   """ Parses the Irc log produced by irc_crawl.py creating
@@ -98,7 +77,7 @@ class IrcParse:
     if oldname not in self.users:
       return
 
-    logging.warn("Nickname change: %s : %s" % (oldname, newname))
+    logging.info("Nickname change: %s : %s" % (oldname, newname))
     self.users[newname] = self.users[oldname]
     self.users[newname].name = newname
     del self.users[oldname]
@@ -127,26 +106,3 @@ class IrcParse:
       return
 
     self.users[name].set_host(host)
-
-irc = IrcParse(events)
-for user in irc.users.values():
-  if len(user.msgs) > 0:
-    print user
-
-total = len(irc.users)
-anon_sim = AnonymitySimulator(total, irc.events)
-
-print "Total: %s" % (total, )
-print "Lost messages: %s" % (anon_sim.lost_messages)
-
-print "Clients:"
-for client in anon_sim.clients:
-  if(total == len(client.slots)):
-    continue
-  print len(client.slots)
-
-print "Slots:"
-for slot in anon_sim.slots:
-  if(total == len(slot.clients)):
-    continue
-  print len(slot.clients)
