@@ -137,6 +137,7 @@ total = len(irc.users)
 anon_sim = AnonymitySimulator(total, irc.events)
 
 print "Total: %s" % (total, )
+print "Lost messages: %s" % (anon_sim.lost_messages)
 
 print "Clients:"
 for client in anon_sim.clients:
