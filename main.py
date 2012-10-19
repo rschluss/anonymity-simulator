@@ -11,6 +11,7 @@ import sys
 
 from anon_sim import AnonymitySimulator
 from irc_parse import IrcParse
+from twitter_parse import TwitterParse
 
 sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 
@@ -32,14 +33,15 @@ events = pickle.load(f)
 f.close()
 
 if dataset_type == "irc":
-  irc = IrcParse(events)
-  total = len(irc.users)
-  events = irc.events
+  parser = IrcParse(events)
+elif dataset_type == "twitter":
+  parser = TwitterParse(events)
 else:
   print "Invalid dataset type: %s" % (dataset_type, )
   sys.exit(-1)
 
-anon_sim = AnonymitySimulator(total, events, min_anon)
+total = len(parser.users)
+anon_sim = AnonymitySimulator(total, parser.events, min_anon)
 
 print "Total: %s" % (total, )
 print "Lost messages: %s" % (anon_sim.lost_messages)

@@ -34,6 +34,7 @@ class IrcParse:
 
     def add_msg(self, etime, msg):
       """ User posted a message """
+      assert(self.online)
       self.msgs.append((etime, msg))
 
     def set_host(self, host):
@@ -70,7 +71,7 @@ class IrcParse:
     else:
       logging.info("Client joined: %s" % (name, ))
       self.users[name] = IrcParse.User(name, etime, len(self.users))
-    self.events.append((etime, "join", self.users[name].uid, "join"))
+    self.events.append((etime, "join", self.users[name].uid))
 
   def on_nick(self, etime, (oldname, newname)):
     """ Handler for the client nick (name change) event """

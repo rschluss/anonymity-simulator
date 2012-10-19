@@ -82,6 +82,8 @@ class AnonymitySimulator:
 
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
+
+    assert self.clients[uid].get_online()
     for client in self.clients:
       if not client.get_online():
         if client.remove_if(uid) <= self.min_anon or \

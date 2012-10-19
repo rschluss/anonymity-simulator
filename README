@@ -64,7 +64,15 @@ python2 main.py [--input=data] [--type=irc] [--min_anon=0] [--debug]
     would automatically ignore future messages coming from that slot
   debug - Print debug (output information)
 
-Parsers: irc
+Parsers: irc, twitter
+
+Parsers should produce a set of users with UIDs ranging from 0 to
+len(users) - 1 and data in the format:
+(float time, string event, var data)
+Event types (and data):
+  - join : data = uid
+  - quit : data = uid
+  - msg : data = (uid, msg)
 
 Other files
 ===============================================================================
