@@ -1,0 +1,41 @@
+IRC Crawling
+
+Overview
+===============================================================================
+The utilities contained here-in are used for crawling IRC and then to parse
+the resulting data set.
+
+All utilities have been built uisng Python2 and have not been tested on
+Python3. irc_crawl.py requires the Python irc package to be installed:
+http://python-irclib.sourceforge.net/
+
+irc_crawl.py
+===============================================================================
+python2 irc_crawl.py [--server=irc.freenode.org] [--port=6667] 
+                     [--channel=#ubuntu] [--username=dedis] [--output=data]
+                     [--debug]
+  server - IRC server to connect to
+  port - Port for the IRC server
+  channel - IRC channel to connect to
+  username - Preferred IRC username
+  output - Where to store the crawl data upon completion
+  debug - Print debug (output information)
+
+The data will be stored in a pickled list using the following tuple format:
+(float time, string event, var data)
+Event types (and data):
+  - join : data = name
+  - quit : data = name
+  - nick : data = (old name, new name)
+  - msg : data = (name, msg)
+  - whois : data = (name, host)
+
+irc_parse.py
+===============================================================================
+python2 irc_parse.py [--input=data] [--debug]
+  input - Where the crawled data is
+  debug - Print debug (output information)
+
+anon_sim.py
+===============================================================================
+Class library for evaluating anonymity sets over a data set
