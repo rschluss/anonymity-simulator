@@ -147,6 +147,11 @@ def find_popular_id(response):
 
   return True
 
+def write_output(msg):
+  f = open(output, "a")
+  f.write(msg + "\n")
+  f.close()
+
 def store_status(response):
   """ Callback for storing statuses """
   try:

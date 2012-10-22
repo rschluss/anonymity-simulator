@@ -28,14 +28,10 @@ min_anon = int(optdict.get("--min_anon", 0))
 if "--debug" in optdict:
   logging.basicConfig(level=logging.INFO)
 
-f = open(datain, "rb")
-events = pickle.load(f)
-f.close()
-
 if dataset_type == "irc":
-  parser = IrcParse(events)
+  parser = IrcParse(filename=datain)
 elif dataset_type == "twitter":
-  parser = TwitterParse(events)
+  parser = TwitterParse(filename=datain)
 else:
   print "Invalid dataset type: %s" % (dataset_type, )
   sys.exit(-1)

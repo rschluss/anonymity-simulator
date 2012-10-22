@@ -29,11 +29,17 @@ output = optdict.get("--output", "data")
 if "--debug" in optdict:
   logging.basicConfig(level=logging.INFO)
 
-events = []
+f = open(output, "w+")
+f.close()
+
 base_time = time.time()
-have_who = {}
 
 # Helper functions
+
+def write_output(msg):
+  f = open(output, "a")
+  f.write(msg + "\n")
+  f.close()
 
 def get_ctime():
   """ Returns the time since beginning """
@@ -46,32 +52,28 @@ def parse_name(long_name):
     return None
   return names[0]
 
+# Event handlers
+
 def on_join(connection, event):
   """ Event handler for when a user joins a channel """
   name = parse_name(event.source())
   if name == None:
     return
-  logging.info("Client joined: %s" % (name, ))
-  events.append((get_ctime(), "join", name))
-  connection.who(name)
+  write_output("%s:%s:%s" % (get_ctime(), "join", name))
 
 def on_nick(connection, event):
   """ Event handler for when a user changes their nick """
   oldname = parse_name(event.source())
   if oldname == None:
     return
-  logging.info("Nickname change: %s : %s" % (oldname, event.target()))
-  events.append((get_ctime(), "nick", (oldname, event.target())))
+  write_output("%s:%s:%s:%s" % (get_ctime(), "nick", oldname, event.target()))
 
 def on_quit(connection, event):
   """ Event handler for when a user quits a channel or leaves the server """
   name = parse_name(event.source())
   if name == None:
     return
-  logging.info("Client quit: %s" % (name, ))
-  events.append((get_ctime(), "quit", name))
-  if name not in have_who:
-    connection.whowas(name, "1")
+  write_output("%s:%s:%s" % (get_ctime(), "quit", name))
 
 def on_names(connection, event):
   """ Event handler for querying all the names of users currently with in a
@@ -82,8 +84,7 @@ def on_names(connection, event):
 
   names = data[2]
   for name in names.split(" "):
-    logging.info("Client online: %s" % (name, ))
-    events.append((0, "join", name))
+    write_output("%s:%s:%s" % (0, "join", name))
 
 def on_connect(connection, event):
   """ Event handler for when the crawler has connected to the server """
@@ -110,20 +111,7 @@ def on_msg(connection, event):
     return
 
   msg = event.arguments()[0]
-  logging.info("%s: %s" % (name, msg))
-  events.append((get_ctime(), "msg", (name, msg)))
-  if name not in have_who:
-    connection.who(name)
-
-def on_whois(connection, event):
-  """ Event handler for whois, who, whowas calls """
-  if len(event.arguments()) < 3:
-    return
-  name = event.arguments()[1]
-  host = event.arguments()[2]
-  events.append((get_ctime(), "whois", (name, host)))
-  have_who[name] = True
-  logging.info("Whois: %s : %s" % (name, host))
+  write_output("%s:%s:%s:%s" % (get_ctime(), "msg", name, msg))
 
 # Create the client and add the handlers defined above
 client = irc.client.IRC()
@@ -140,17 +128,6 @@ con.add_global_handler("pubnotice", on_msg)
 con.add_global_handler("topic", on_msg)
 con.add_global_handler("namreply", on_names)
 con.add_global_handler("nick", on_nick)
-con.add_global_handler("whowasuser", on_whois)
-con.add_global_handler("whoreply", on_whois)
-
-# Use ctrl-c / sigint to exit and save data to disk
-def signal_handler(signal, frame):
-  f = open(output, "wb+")
-  pickle.dump(events, f)
-  f.close()
-  sys.exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
 
 # Run forever...
 client.process_forever()

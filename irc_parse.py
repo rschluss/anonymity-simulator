@@ -16,7 +16,6 @@ class IrcParse:
       self.online_time = [ctime]
       self.msgs = []
       self.online = True
-      self.host = ""
       self.uid = uid
 
     def join(self, ctime):
@@ -37,17 +36,18 @@ class IrcParse:
       assert(self.online)
       self.msgs.append((etime, msg))
 
-    def set_host(self, host):
-      """ Retrieved the user's host info """
-      self.host = host
-
     def __repr__(self): 
       return self.__str__()
 
     def __str__(self):
-      return "%s@%s: %s" % (self.name, self.host, len(self.msgs))
+      return "%s: %s" % (self.name, len(self.msgs))
 
-  def __init__(self, events):
+  def __init__(self, events=[], filename=""):
+    if len(filename) > 0:
+      f = open(filename, "rb")
+      events.extend(f.readlines())
+      f.close()
+
     self.users = {}
     self.events = []
 
@@ -56,12 +56,19 @@ class IrcParse:
         "quit" : self.on_quit,
         "nick" : self.on_nick,
         "msg" : self.on_msg,
-        "whois" : self.on_whois
         }
 
     for event in events:
+      # Split into different fields
+      event = event.split(':')
+      # Remove the new line
+      event[-1] = event[-1].rstrip('\n')
+      # Get the callback
       callback = event_actions.get(event[1], None)
-      callback and callback(event[0], event[2])
+      # Prepare the variable length data field
+      data = event[2] if len(event) == 3 else (event[2], ':'.join(event[3:]))
+      # Process the data
+      callback and callback(event[0], data)
 
   def on_join(self, etime, name):
     """ Handler for the client join event """
@@ -100,10 +107,3 @@ class IrcParse:
     logging.info("%s: %s" % (name, msg))
     self.users[name].add_msg(etime, msg)
     self.events.append((etime, "msg", (self.users[name].uid, msg)))
-
-  def on_whois(self, etime, (name, host)):
-    """ Handler for the client host inquiry event """
-    if name not in self.users:
-      return
-
-    self.users[name].set_host(host)

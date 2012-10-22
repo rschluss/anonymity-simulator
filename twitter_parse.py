@@ -4,6 +4,7 @@
 AnonymitySimulator."""
 
 import logging
+import pickle
 from datetime import datetime
 
 pre_time = 60.0
@@ -54,7 +55,12 @@ class TwitterParse:
     def __str__(self):
       return "%s: %s" % (self.name, len(self.msgs))
 
-  def __init__(self, events):
+  def __init__(self, events={}, filename=""):
+    if len(filename) > 0:
+      f = open(filename, "rb")
+      events = pickle.load(f)
+      f.close()
+
     userids = events["userids"]
     statuses = events["statuses"]
 
