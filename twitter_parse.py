@@ -96,7 +96,7 @@ class TwitterParse:
 
         online = not online
 
-    self.events.sort()
+    self.events.sort(key=lambda t: t[0], reverse = True)
 
   def parse_time(self, time):
     return datetime.strptime(time, "%a %b %d %H:%M:%S +0000 %Y")
