@@ -68,10 +68,13 @@ class IrcParse:
       # Prepare the variable length data field
       data = event[2] if len(event) == 3 else (event[2], ':'.join(event[3:]))
       # Process the data
-      callback and callback(event[0], data)
+      callback and callback(float(event[0]), data)
+
+    self.events.sort(key=lambda t: t[0], reverse = True)
 
   def on_join(self, etime, name):
     """ Handler for the client join event """
+    name = name.lstrip("+@~")
     if name in self.users:
       logging.info("Client rejoined: %s" % (name, ))
       self.users[name].join(etime)
@@ -81,6 +84,8 @@ class IrcParse:
     self.events.append((etime, "join", self.users[name].uid))
 
   def on_nick(self, etime, (oldname, newname)):
+    oldname = oldname.lstrip("+@~")
+    newname = newname.lstrip("+@~")
     """ Handler for the client nick (name change) event """
     if oldname not in self.users:
       return
@@ -92,6 +97,7 @@ class IrcParse:
 
   def on_quit(self, etime, name):
     """ Handler for the client quit event """
+    name = name.lstrip("+@~")
     if name not in self.users:
       return
 
@@ -101,6 +107,7 @@ class IrcParse:
 
   def on_msg(self, etime, (name, msg)):
     """ Handler for the client message post event """
+    name = name.lstrip("+@~")
     if name not in self.users:
       return
 
