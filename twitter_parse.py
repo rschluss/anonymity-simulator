@@ -55,25 +55,25 @@ class TwitterParse:
     def __str__(self):
       return "%s: %s" % (self.name, len(self.msgs))
 
-  def __init__(self, events={}, filename=""):
+  def __init__(self, userids=[], statuses=[], filename=""):
     if len(filename) > 0:
       f = open(filename, "rb")
-      events = pickle.load(f)
+      userids.extend(pickle.load(f))
+      while True:
+        try:
+          statuses.append(pickle.load(f))
+        except EOFError:
+          break
       f.close()
 
-    userids = events["userids"]
-    statuses = events["statuses"]
+    if len(statuses) == 0:
+      return
 
     self.users = {}
     for uid in userids:
       self.users[uid] = TwitterParse.User(uid, len(self.users))
     self.events = []
-
-    if len(statuses) == 0:
-      return
-
     start_time = self.parse_time(statuses[0].created_at)
-    self.events = []
 
     for status in statuses:
       user_id = status.user.id

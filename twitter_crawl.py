@@ -147,18 +147,15 @@ def find_popular_id(response):
 
   return True
 
-def write_output(msg):
-  f = open(output, "a")
-  f.write(msg + "\n")
-  f.close()
-
 def store_status(response):
   """ Callback for storing statuses """
   try:
     data = api._ParseAndCheckTwitter(response)
     status = twitter.Status.NewFromJsonDict(data)
     if status.user.id in userids:
-      statuses.append(status)
+      f = open(output, "ab")
+      pickle.dump(status, f)
+      f.close()
   except:
     logging.info("Error response: %s" % (response, ))
   return True
@@ -178,6 +175,10 @@ if len(userids) > 5000:
 
 logging.info("Following %s users" % (len(userids), ))
 
+f = open(output, "wb+")
+pickle.dump(userids, f)
+f.close()
+
 # Use ctrl-c / sigint to exit and save data to disk
 def signal_handler(signal, frame):
   global stop
@@ -185,10 +186,7 @@ def signal_handler(signal, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-statuses = []
-api.StreamUsers(userids, store_status)
-
-data = {"statuses" : statuses, "userids" : userids}
-f = open(output, "wb")
-pickle.dump(data, f)
-f.close()
+try:
+  api.StreamUsers(userids, store_status)
+except KeyboardInterrupt:
+  pass
