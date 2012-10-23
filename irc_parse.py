@@ -4,6 +4,7 @@
 AnonymitySimulator."""
 
 import logging
+import pickle
 
 class IrcParse:
   """ Parses the Irc log produced by irc_crawl.py creating
@@ -45,7 +46,11 @@ class IrcParse:
   def __init__(self, events=[], filename=""):
     if len(filename) > 0:
       f = open(filename, "rb")
-      events.extend(f.readlines())
+      while True:
+        try:
+          events.append(pickle.load(f))
+        except EOFError:
+          break
       f.close()
 
     self.users = {}
@@ -59,10 +64,6 @@ class IrcParse:
         }
 
     for event in events:
-      # Split into different fields
-      event = event.split(':')
-      # Remove the new line
-      event[-1] = event[-1].rstrip('\n')
       # Get the callback
       callback = event_actions.get(event[1], None)
       # Prepare the variable length data field

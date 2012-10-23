@@ -29,6 +29,7 @@ output = optdict.get("--output", "data")
 if "--debug" in optdict:
   logging.basicConfig(level=logging.INFO)
 
+# Overwrite file
 f = open(output, "w+")
 f.close()
 
@@ -38,7 +39,7 @@ base_time = time.time()
 
 def write_output(msg):
   f = open(output, "a")
-  f.write(msg + "\n")
+  f.write(msg)
   f.close()
 
 def get_ctime():
@@ -59,21 +60,21 @@ def on_join(connection, event):
   name = parse_name(event.source())
   if name == None:
     return
-  write_output("%s:%s:%s" % (get_ctime(), "join", name))
+  write_output(pickle.dumps((get_ctime(), "join", name)))
 
 def on_nick(connection, event):
   """ Event handler for when a user changes their nick """
   oldname = parse_name(event.source())
   if oldname == None:
     return
-  write_output("%s:%s:%s:%s" % (get_ctime(), "nick", oldname, event.target()))
+  write_output(pickle.dumps((get_ctime(), "nick", oldname, event.target())))
 
 def on_quit(connection, event):
   """ Event handler for when a user quits a channel or leaves the server """
   name = parse_name(event.source())
   if name == None:
     return
-  write_output("%s:%s:%s" % (get_ctime(), "quit", name))
+  write_output(pickle.dumps((get_ctime(), "quit", name)))
 
 def on_names(connection, event):
   """ Event handler for querying all the names of users currently with in a
@@ -84,7 +85,7 @@ def on_names(connection, event):
 
   names = data[2]
   for name in names.split(" "):
-    write_output("%s:%s:%s" % (0, "join", name))
+    write_output(pickle.dumps((0, "join", name)))
 
 def on_connect(connection, event):
   """ Event handler for when the crawler has connected to the server """
@@ -111,7 +112,7 @@ def on_msg(connection, event):
     return
 
   msg = event.arguments()[0]
-  write_output("%s:%s:%s:%s" % (get_ctime(), "msg", name, msg))
+  write_output(pickle.dumps((get_ctime(), "msg", name, msg)))
 
 # Create the client and add the handlers defined above
 client = irc.client.IRC()
@@ -130,4 +131,7 @@ con.add_global_handler("namreply", on_names)
 con.add_global_handler("nick", on_nick)
 
 # Run forever...
-client.process_forever()
+try:
+  client.process_forever()
+except KeyboardInterrupt:
+  pass
