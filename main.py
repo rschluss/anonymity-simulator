@@ -15,6 +15,23 @@ from twitter_parse import TwitterParse
 
 sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 
+class DefaultParse:
+  def __init__(self, filename):
+    self.events = []
+    self.users = {}
+    f = open(filename, "rb")
+
+    while True:
+      try:
+        event = pickle.load(f)
+        self.events.append(event)
+        if event[1] == "join" and event[2] not in  self.users:
+          self.users[event[2]] = event[2]
+      except EOFError:
+        break
+
+    f.close()
+
 optlist, args = getopt.getopt(sys.argv[1:], "", ["type=", "input=", \
     "min_anon=", "clients_per_client=", "slots_per_client=", "debug"])
 optdict = {}
@@ -22,7 +39,7 @@ for k,v in optlist:
   optdict[k] = v
 
 datain = optdict.get("--input", "data")
-dataset_type = optdict.get("--type", "irc")
+dataset_type = optdict.get("--type", "parsed")
 clients_per_client = int(optdict.get("--clients_per_client", 1))
 slots_per_client = int(optdict.get("--slots_per_client", 1))
 min_anon = int(optdict.get("--min_anon", 0))
@@ -35,6 +52,8 @@ if dataset_type == "irc":
   parser = IrcParse(filename=datain)
 elif dataset_type == "twitter":
   parser = TwitterParse(filename=datain)
+elif dataset_type == "parsed":
+  parser = DefaultParse(filename=datain)
 else:
   print "Invalid dataset type: %s" % (dataset_type, )
   sys.exit(-1)

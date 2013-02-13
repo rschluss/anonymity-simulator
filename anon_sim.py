@@ -1,6 +1,12 @@
 #!/usr/bin/python2
 
-"""Common class for evaluating anonymity over a data set"""
+"""
+Common class for evaluating anonymity over a data set
+Event structure:
+  (time, "join", uid)
+  (time, "quit", uid)
+  (time, "msg", (uid, msg))
+"""
 
 import logging
 
@@ -85,6 +91,7 @@ class AnonymitySimulator:
 
   def process_events(self, events):
     next_time = self.round_time_span
+    events.reverse()
 
     while len(events) > 0 or len(self.delayed_events) > 0:
       delayed_events = self.delayed_events
@@ -108,7 +115,12 @@ class AnonymitySimulator:
 
   def process_event(self, event):
     callback = self.event_actions.get(event[1], None)
-    result = callback and callback(event[0], event[2])
+    try:
+      result = callback and callback(event[0], event[2])
+    except:
+      print event
+      raise
+
     if not result:
       self.delayed_events.append(event)
 
