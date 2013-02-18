@@ -45,6 +45,10 @@ def main():
                       help="IRC channel names to connect to on the server. "
                            "'all' will join all channels on the server "
                            "(default: #ubuntu)")
+  parser.add_argument("-n", "--n_channels", default=0,
+                      help="The number of channels to join (up to the maximum "
+                           "allowed by the server) (default: 1), "
+                            "this overrides \"--channels\"")
   parser.add_argument("-p", "--port", type=int, default=6667,
                       help="port on the server to connect to (default: 6667)")
   parser.add_argument("-u", "--username", default="dedis",
@@ -55,7 +59,7 @@ def main():
   parser.add_argument("-o", "--output", default="data",
                       help="file to write to write the IRC events to. should "
                            "be passed to irc_parse.py")
-  parser.add_argument("-n", "--info", dest="log_level", action="store_const",
+  parser.add_argument("-i", "--info", dest="log_level", action="store_const",
                       const=logging.INFO,
                       help="sets the logging level to 'info'")
   parser.add_argument("-d", "--debug", dest="log_level", action="store_const",
@@ -72,10 +76,12 @@ def main():
   if not irc.login():
     return
 
-  if arg.channels == ["all"]:
+  if args.n_channels != 0 or args.channels == ["all"]:
     to_join = [channel[0] for channel in irc.get_all_channels()]
+    if args.n_channels != -1:
+      to_join = to_join[:min(n_channels, len(to_join))]
   else:
-    to_join = arg.channels
+    to_join = args.channels
 
   print to_join
   to_join.reverse()
