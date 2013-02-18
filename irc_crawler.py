@@ -20,7 +20,7 @@ Outputs the following data formats:
 """
 
 import codecs
-import getopt
+import argparse
 import irc.client
 import logging
 import os
@@ -35,34 +35,47 @@ import sys
 sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 
 def main():
-  optlist, args = getopt.getopt(sys.argv[1:], "", ["server=", "channel=",
-    "port=", "username=", "output=", "debug","info", "channels=", "password="])
-  optdict = {}
-  for k,v in optlist:
-    optdict[k] = v
+  parser = argparse.ArgumentParser(description="Gathers data for use with "
+                                               "AnonymitySimulator")
 
-  channel = optdict.get("--channel", "#ubuntu")
-  server = optdict.get("--server", "irc.freenode.org")
-  port = int(optdict.get("--port", 6667))
-  username = optdict.get("--username", "dedis")
-  password = optdict.get("--password", None)
-  output = optdict.get("--output", "data")
-  if "--info" in optdict:
-    logging.basicConfig(level=logging.INFO)
-  if "--debug" in optdict:
-    logging.basicConfig(level=logging.DEBUG)
-  channels = int(optdict.get("--channels", 0))
+  parser.add_argument("-s", "--server", default="irc.freenode.org",
+                      help="IRC server address to connect to (default: "
+                           "irc.freenode.net")
+  parser.add_argument("-c", "--channels", default=["#ubuntu"], nargs="+",
+                      help="IRC channel names to connect to on the server. "
+                           "'all' will join all channels on the server "
+                           "(default: #ubuntu)")
+  parser.add_argument("-p", "--port", type=int, default=6667,
+                      help="port on the server to connect to (default: 6667)")
+  parser.add_argument("-u", "--username", default="dedis",
+                      help="username we'll show up as on the IRC server "
+                           "(default: dedis)")
+  parser.add_argument("-w", "--password",
+                      help="password to give to NickServ for our username")
+  parser.add_argument("-o", "--output", default="data",
+                      help="file to write to write the IRC events to. should "
+                           "be passed to irc_parse.py")
+  parser.add_argument("-n", "--info", dest="log_level", action="store_const",
+                      const=logging.INFO,
+                      help="sets the logging level to 'info'")
+  parser.add_argument("-d", "--debug", dest="log_level", action="store_const",
+                      const=logging.DEBUG,
+                      help="sets the logging level to 'debug'")
+  args = parser.parse_args()
+
+  if hasattr(args, "log_level"):
+    logging.basicConfig(level=args.log_level)
 
   ircs = []
-  irc = IrcHelper(username, server, port, output, password)
+  irc = IrcHelper(args.username, args.server, args.port, args.output,
+                  args.password)
   if not irc.login():
     return
 
-  to_join = [channel]
-  if channels != 0:
+  if arg.channels == ["all"]:
     to_join = [channel[0] for channel in irc.get_all_channels()]
-    if channels > 0:
-      to_join = to_join[:min(channels, len(to_join))]
+  else:
+    to_join = arg.channels
 
   print to_join
   to_join.reverse()
