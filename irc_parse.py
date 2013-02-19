@@ -14,7 +14,7 @@ def main():
     print "Usage: %s crawl.data" % (sys.argv[0],)
     return
 
-  logging.basicConfig(level=logging.INFO)
+#  logging.basicConfig(level=logging.INFO)
   fname = sys.argv[1]
   dname = fname + "_data"
   if os.path.exists(dname):
@@ -26,9 +26,13 @@ def main():
 
   irc = IrcParse(filename = sys.argv[1])
   for channel in irc.channels:
+    chan = irc.channels[channel]
     cname = channel[1:].replace("/", "_")
+
+    print "Channel %s: %s users, %s messages, %s time" % \
+        (cname, len(chan.users), chan.messages, chan.end_time - chan.start_time)
     output = file(dname + "/" + cname, "w+")
-    for line in irc.channels[channel].events:
+    for line in chan.events:
       output.write(pickle.dumps(line))
     output.close()
 
@@ -123,15 +127,19 @@ class IrcParse:
 
   """ The Irc log contains many channels """
   class Channel:
-    def __init__(self, name):
+    def __init__(self, name, start_time):
       self.name = name
       self.users = {}
       self.events = []
       self.cuid = 0
+      self.messages = 0
       self.merged_uids = {}
+      self.start_time = start_time
+      self.end_time = start_time
 
     def join(self, ctime, username):
       """ Handler for clients joining """
+      self.end_time = ctime
       if username in self.users:
         self.users[username].join(ctime)
         logging.info("%s: %s - Client rejoined: %s/%s" % \
@@ -143,6 +151,7 @@ class IrcParse:
             (self.name, ctime, username, self.users[username].uid))
 
     def quit(self, ctime, username, broadcast):
+      self.end_time = ctime
       if username not in self.users:
         return
 
@@ -171,11 +180,13 @@ class IrcParse:
 
     def add_msg(self, ctime, username, msg):
       """ Handler for the client message post event """
+      self.end_time = ctime
       if username not in self.users:
         return
 
       logging.info("%s: %s - %s/%s: %s" % \
           (self.name, ctime, username, self.users[username].uid, msg))
+      self.messages += 1
       self.users[username].add_msg(ctime, msg)
 
     def finished(self):
@@ -244,7 +255,7 @@ class IrcParse:
     channel = channel.lower()
     name = name.lstrip("+@~")
     if channel not in self.channels:
-      self.channels[channel] = IrcParse.Channel(channel)
+      self.channels[channel] = IrcParse.Channel(channel, etime)
     self.channels[channel].join(etime, name)
 
   def on_nick(self, etime, (oldname, newname)):
