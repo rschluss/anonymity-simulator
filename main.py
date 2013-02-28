@@ -3,8 +3,8 @@
 """Reads the output from a data set, extracts the necessary data that
 can then be run through the AnonymitySimulator."""
 
+import argparse
 import codecs
-import getopt
 import logging
 import pickle
 import sys
@@ -32,53 +32,60 @@ class DefaultParse:
 
     f.close()
 
-optlist, args = getopt.getopt(sys.argv[1:], "", ["type=", "input=", \
-    "min_anon=", "clients_per_client=", "slots_per_client=", "debug"])
-optdict = {}
-for k,v in optlist:
-  optdict[k] = v
+parser = argparse.ArgumentParser(description="The AnonymitySimulator")
+parser.add_argument("-i", "--input", default="data",
+    help="input dataset")
+parser.add_argument("-t", "--type", default="parsed",
+    help="twitter, irc, or parsed (default: parsed)")
+parser.add_argument("-c", "--clients_per_client", type=int, default=1,
+    help="number of (virtual) clients per a client (default: 1)")
+parser.add_argument("-p", "--pseudonyms_per_client", type=int, default=1,
+    help="the number of pseudonyms per client (default: 1)")
+parser.add_argument("-d", "--debug", dest="log_level", action="store_const",
+    const=logging.DEBUG, help="sets the logging level to 'debug'")
+parser.add_argument("--info", dest="log_level", action="store_const",
+    const=logging.INFO, help="sets the logging level to 'info'")
+parser.add_argument("-m", "--min_anon", type=int, default=0,
+    help="minimum value for the anonymity meter, (default: 0)")
+parser.add_argument("-r", "--round_time_span", type=float, default=2.0,
+    help="specifies the duration of a round in seconds (default: 2.0)")
+args = parser.parse_args()
 
-datain = optdict.get("--input", "data")
-dataset_type = optdict.get("--type", "parsed")
-clients_per_client = int(optdict.get("--clients_per_client", 1))
-slots_per_client = int(optdict.get("--slots_per_client", 1))
-min_anon = int(optdict.get("--min_anon", 0))
-round_time_span = float(optdict.get("--round_time_span", 2.0))
+if hasattr(args, "log_level"):
+  logging.basicConfig(level=args.log_level)
 
-if "--debug" in optdict:
-  logging.basicConfig(level=logging.INFO)
 
-if dataset_type == "irc":
-  parser = IrcParse(filename=datain)
-elif dataset_type == "twitter":
-  parser = TwitterParse(filename=datain)
-elif dataset_type == "parsed":
-  parser = DefaultParse(filename=datain)
+if args.type == "irc":
+  parser = IrcParse(filename=args.input)
+elif args.type == "twitter":
+  parser = TwitterParse(filename=args.input)
+elif args.type == "parsed":
+  parser = DefaultParse(filename=args.input)
 else:
   print "Invalid dataset type: %s" % (dataset_type, )
   sys.exit(-1)
 
 total = len(parser.users)
-anon_sim = AnonymitySimulator(total, parser.events, min_anon = min_anon, \
-    slots_per_client = slots_per_client, \
-    clients_per_client = clients_per_client, \
-    round_time_span = round_time_span)
+anon_sim = AnonymitySimulator(total, parser.events, min_anon = args.min_anon, \
+    pseudonyms_per_client = args.pseudonyms_per_client, \
+    clients_per_client = args.clients_per_client, \
+    round_time_span = args.round_time_span)
 
-total_clients = total * clients_per_client
-total_slots = total * slots_per_client
+total_clients = total * args.clients_per_client
+total_pseudonyms = total * args.pseudonyms_per_client
 
 print "Total clients: %s" % (total_clients, )
-print "Total slots: %s" % (total_slots, )
+print "Total pseudonyms: %s" % (total_pseudonyms, )
 print "Lost messages: %s" % (anon_sim.lost_messages)
 
 print "Clients:"
 for client in anon_sim.clients:
-  if(total_slots == len(client.slots)):
+  if(total_pseudonyms == len(client.pseudonyms)):
     continue
-  print len(client.slots)
+  print len(client.pseudonyms)
 
-print "Slots:"
-for slot in anon_sim.slots:
-  if(total_clients == len(slot.clients)):
+print "Pseudonyms:"
+for pseudonym in anon_sim.pseudonyms:
+  if(total_clients == len(pseudonym.clients)):
     continue
-  print len(slot.clients)
+  print len(pseudonym.clients)

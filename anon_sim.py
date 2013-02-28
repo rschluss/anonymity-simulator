@@ -12,12 +12,12 @@ import logging
 
 class AnonymitySimulator:
   """ Processes a data set to calculate both the clients' and their
-  respective message slots' anonymity over time. """
+  respective message pseudonyms' anonymity over time. """
   class Client:
     """ Represents a single client """
     def __init__(self, uid, total):
       self.uid = uid
-      self.slots = {num: True for num in range(total)}
+      self.pseudonyms = {num: True for num in range(total)}
       self.online = False
 
     def set_online(self):
@@ -34,15 +34,15 @@ class AnonymitySimulator:
 
     def remove_if(self, idx):
       """ Returns the count if the slot was removed """
-      count = len(self.slots)
-      if idx in self.slots:
+      count = len(self.pseudonyms)
+      if idx in self.pseudonyms:
         count -= 1
       return count
 
     def remove_slot(self, idx):
       """ Remove a slot from the client's anonymity set """
-      if idx in self.slots:
-        del self.slots[idx]
+      if idx in self.pseudonyms:
+        del self.pseudonyms[idx]
 
   class Slot:
     """ Represents a single message session """
@@ -62,7 +62,7 @@ class AnonymitySimulator:
       if idx in self.clients:
         del self.clients[idx]
 
-  def __init__(self, total, events, min_anon = 0, slots_per_client = 1,
+  def __init__(self, total, events, min_anon = 0, pseudonyms_per_client = 1,
       clients_per_client = 1, round_time_span = 2.0):
 
     self.event_actions = {
@@ -72,15 +72,15 @@ class AnonymitySimulator:
         }
 
     total_clients = total * clients_per_client
-    total_slots = total * slots_per_client
+    total_pseudonyms = total * pseudonyms_per_client
 
-    self.clients = [AnonymitySimulator.Client(uid, total_slots) \
+    self.clients = [AnonymitySimulator.Client(uid, total_pseudonyms) \
         for uid in range(total_clients)]
-    self.slots = [AnonymitySimulator.Slot(uid, total_clients) \
-        for uid in range(total_slots)]
+    self.pseudonyms = [AnonymitySimulator.Slot(uid, total_clients) \
+        for uid in range(total_pseudonyms)]
 
     self.clients_per_client = clients_per_client
-    self.slots_per_client = slots_per_client
+    self.pseudonyms_per_client = pseudonyms_per_client
     self.min_anon = min_anon
     self.round_time_span = round_time_span
     self.total = total
@@ -145,12 +145,12 @@ class AnonymitySimulator:
     for client in self.clients:
       if not client.get_online():
         if client.remove_if(uid) <= self.min_anon or \
-            self.slots[uid].remove_if(client.uid) <= self.min_anon:
+            self.pseudonyms[uid].remove_if(client.uid) <= self.min_anon:
           return False
 
     for client in self.clients:
       if not client.get_online():
         client.remove_slot(uid)
-        self.slots[uid].remove_client(client.uid)
+        self.pseudonyms[uid].remove_client(client.uid)
 
     return True

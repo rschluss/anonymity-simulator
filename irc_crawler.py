@@ -19,8 +19,8 @@ Outputs the following data formats:
   Check the change in channels every X time
 """
 
-import codecs
 import argparse
+import codecs
 import irc.client
 import logging
 import os
@@ -45,7 +45,7 @@ def main():
                       help="IRC channel names to connect to on the server. "
                            "'all' will join all channels on the server "
                            "(default: #ubuntu)")
-  parser.add_argument("-n", "--n_channels", default=0,
+  parser.add_argument("-n", "--n_channels", type=int, default=0,
                       help="The number of channels to join (up to the maximum "
                            "allowed by the server) (default: 1), "
                             "this overrides \"--channels\"")
