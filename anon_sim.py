@@ -6,6 +6,11 @@ Event structure:
   (time, "join", uid)
   (time, "quit", uid)
   (time, "msg", (uid, msg))
+
+A join within a round, happens at the beginning of each round
+A msg happens afterward
+A quit delays until the beginning of the following round
+A user may delay exiting in order to transmit a message
 """
 
 import argparse
@@ -154,65 +159,59 @@ class AnonymitySimulator:
     self.round_time_span = round_time_span
     self.total = total
     self.lost_messages = 0
-    self.delayed_events = []
 
     self.process_events(events)
 
   def process_events(self, events):
-    next_time = self.round_time_span
     events.reverse()
+    delayed_msgs = []
 
-    while len(events) > 0 or len(self.delayed_events) > 0:
-      delayed_events = self.delayed_events
-      self.delayed_events = []
+    while len(events) > 0:
+      to_quit = []
+      msgs = delayed_msgs
+      delayed_msgs = []
 
-      while len(delayed_events) > 0:
-        event = delayed_events.pop()
-        self.process_event(event)
+      # Move us to the period during the next event
+      next_time = events[-1][0] + 2.0 - (events[-1][0] % self.round_time_span)
 
-      # No more join / quit events and there are still message posting events
-      # add these to lost messages and break
-      if len(events) == 0:
-        self.lost_messages += len(self.delayed_events)
-        break
-
-      while len(events) > 0 and events[0][0] < next_time:
+      while len(events) > 0 and events[-1][0] < next_time:
         event = events.pop()
-        self.process_event(event)
+        if event[1] == "join":
+          self.on_join(event[0], event[2])
+        elif event[1] == "msg":
+          msgs.append(event)
+        elif event[1] == "quit":
+          to_quit.append(event)
+        else:
+          assert(False)
 
-      next_time += self.round_time_span
+      for event in msgs:
+        if not self.on_msg(event[0], event[2]):
+          delayed_msgs.append(event)
 
-  def process_event(self, event):
-    callback = self.event_actions.get(event[1], None)
-    try:
-      result = callback and callback(event[0], event[2])
-    except:
-      print event
-      raise
+      for event in to_quit:
+        self.on_quit(event[0], event[2])
 
-    if not result:
-      self.delayed_events.append(event)
+    # No more join / quit events and there are still message posting events
+    # add these to lost messages and break
+    self.lost_messages += len(delayed_msgs)
+
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
     for idx in range(self.clients_per_client):
       self.clients[uid + (idx * self.total)].set_online()
 
-    return True
-
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """
     for idx in range(self.clients_per_client):
       self.clients[uid + (idx * self.total)].set_offline()
 
-    return True
-
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
-
     if not self.clients[uid].get_online():
       # Should be a delayed event!
-      return
+      return False
 
     for client in self.clients:
       if not client.get_online():
