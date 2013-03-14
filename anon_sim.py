@@ -134,6 +134,7 @@ class AnonymitySimulator:
       """ Set the client as offline """
       self.online = False
       self.online_time += ctime - self.last_time
+      self.last_time = -1
 
     def get_online_time(self, ctime = 0):
       if ctime == 0 or self.last_time == -1:
@@ -257,6 +258,7 @@ class AnonymitySimulator:
     return events[idx:]
 
   def splitting_init(self, splitting_order):
+    self.group_online = []
     self.split_group = []
     self.splits = {}
 
@@ -268,10 +270,12 @@ class AnonymitySimulator:
     count = 0
     group = []
     group_idx = 0
+    online = True
 
     for uid in splitting_order:
       self.splits[uid] = group_idx
       group.append(uid)
+      online = online and self.clients[uid].get_online()
 
       count += 1
       if count >= min_anon:
@@ -279,9 +283,11 @@ class AnonymitySimulator:
           remaining -= 1
         else:
           self.split_group.append(group)
+          self.group_online.append(online)
           group_idx += 1
           count = 0
           group = []
+          online = True
 
   def rank_trainer(self, events, trainer_time):
     events = self.bootstrap_trainer(events, trainer_time)
@@ -364,6 +370,8 @@ class AnonymitySimulator:
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
     self.lost_messages += len(msgs)
+    for msg in msgs:
+      self.splitting(msg[0],msg[2][0], msg[2][1], True)
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
@@ -375,6 +383,15 @@ class AnonymitySimulator:
         if not client.get_online():
           for idx in range(self.clients_per_client):
             self.clients[uid + (idx * self.total)].flip_coins([client.uid], math.log(len(self.clients)) / (len(self.clients) * len(self.clients)))
+    elif self.policy == self.splitting:
+      group_idx = self.splits[uid]
+      good = True
+      for g_uid in self.split_group[group_idx]:
+        if not self.clients[g_uid].get_online():
+          good = False
+          break
+      if good:
+        self.group_online[group_idx] = True
 
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """
@@ -385,6 +402,9 @@ class AnonymitySimulator:
       for client in self.clients:
         if client.get_online():
           client.flip_coins([uid])
+    elif self.policy == self.splitting:
+      group_idx = self.splits[uid]
+      self.group_online[group_idx] = False
 
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
@@ -423,18 +443,33 @@ class AnonymitySimulator:
           return False
     return self.maintain_min_anon(etime, uid, msg)
 
-  def splitting(self, etime, uid, msg):
+  def splitting(self, etime, uid, msg, tprint = False):
+    group_idx = self.splits[uid]
+    if not self.group_online[group_idx]:
+      logging.info("%s %s %s %s" % (etime, uid, group_idx, self.split_group[group_idx]))
+      return False
+
+    group_idx = 0
+    for online in self.group_online:
+      if not online:
+        for g_uid in self.split_group[group_idx]:
+          self.pseudonyms[uid].remove_client(g_uid)
+      group_idx += 1
+    return True
+    """
+    # Old code
     group = self.splits[uid]
     count = 0
     for g_uid in self.split_group[group]:
       if not self.clients[g_uid].get_online():
         count += 1
-        return False
     if count > 0:
-      print "%s %s %s %s %s" % (etime, count, uid, g_uid, self.split_group[group])
+      if tprint:
+        print "%s %s %s %s %s" % (etime, count, uid, g_uid, self.split_group[group])
       return False
 
     return self.maintain_min_anon(etime, uid, msg)
+    """
 
 if __name__ == "__main__":
   main()
