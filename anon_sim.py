@@ -333,13 +333,11 @@ class AnonymitySimulator:
       delayed_msgs = list(msgs)
 
       # Move us to the period during the next event
-      next_time = events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span)
+      next_time = min(events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span), end_time)
       joined = {}
 
       while len(events) > 0 and events[-1][0] < next_time:
         event = events.pop()
-        assert( event[0] < next_time)
-        assert( event[0] < end_time)
         if event[1] == "join":
           self.on_join(event[0], event[2])
           joined[event[2]] = True
