@@ -60,8 +60,11 @@ def main():
   parser.add_argument("-e", "--end", type=float, default=-1,
       help="specifies the end time for evaluation (default: all / -1)")
   parser.add_argument("-t", "--trainer", default=None,
-      help="specifies a trainer for the anonymity data for splitting groups: "
-      "join, rank, or random (default: None)")
+      help="specifies a trainer for the anonymity data for static splitting "
+      "groups: join, rank, or random (default: None)")
+  parser.add_argument("-x", "--policy", default="min_anon",
+      help="specifies the policy for the simulator: "
+      "min_anon, static_split, dynamic_split (default: min_anon)")
   args = parser.parse_args()
 
   logging.basicConfig(level=args.log_level)
@@ -81,6 +84,7 @@ def main():
       pseudonyms_per_client = args.pseudonyms_per_client, \
       clients_per_client = args.clients_per_client, \
       round_time_span = args.round_time_span, \
+      policy = args.policy, \
       trainer = trainer, \
       trainer_time = args.start,
       end_time = args.end)
@@ -181,8 +185,10 @@ class AnonymitySimulator:
       if idx in self.clients:
         del self.clients[idx]
 
-  def __init__(self, total, events, min_anon = 0, pseudonyms_per_client = 1,
-      clients_per_client = 1, round_time_span = 2.0, trainer=None, trainer_time=0,
+  def __init__(self, total, events, min_anon = 0,
+      pseudonyms_per_client = 1, clients_per_client = 1,
+      round_time_span = 2.0, policy = "min_anon",
+      trainer=None, trainer_time=0,
       end_time=-1):
 
     self.event_actions = {
@@ -218,8 +224,10 @@ class AnonymitySimulator:
         events = trainer(self, events, trainer_time)
 
     self.policy = self.maintain_min_anon
-#    self.policy = self.coin_flip
-    self.policy = self.splitting
+    if policy == "static_split":
+      self.policy = self.static_splitting
+    elif policy == "dynamic_split":
+      pass
 
     if self.policy == self.coin_flip:
       uids = []
@@ -257,7 +265,7 @@ class AnonymitySimulator:
       return to_prepend.extend(events[idx:])
     return events[idx:]
 
-  def splitting_init(self, splitting_order):
+  def static_splitting_init(self, splitting_order):
     self.group_online = []
     self.split_group = []
     self.splits = {}
@@ -298,7 +306,7 @@ class AnonymitySimulator:
     splitting_order = []
     for client in clients:
       splitting_order.append(client.uid)
-    self.splitting_init(splitting_order)
+    self.static_splitting_init(splitting_order)
 
     return events
 
@@ -308,7 +316,7 @@ class AnonymitySimulator:
     splitting_order = []
     for client in self.clients:
       splitting_order.append(client.uid)
-    self.splitting_init(splitting_order)
+    self.static_splitting_init(splitting_order)
 
     return events
 
@@ -318,7 +326,7 @@ class AnonymitySimulator:
     splitting_order = range(len(self.clients))
     rand = random.Random()
     rand.shuffle(splitting_order)
-    self.splitting_init(splitting_order)
+    self.static_splitting_init(splitting_order)
 
     return events
 
@@ -371,7 +379,7 @@ class AnonymitySimulator:
     # add these to lost messages and break
     self.lost_messages += len(msgs)
     for msg in msgs:
-      self.splitting(msg[0],msg[2][0], msg[2][1], True)
+      self.static_splitting(msg[0],msg[2][0], msg[2][1], True)
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
@@ -383,7 +391,7 @@ class AnonymitySimulator:
         if not client.get_online():
           for idx in range(self.clients_per_client):
             self.clients[uid + (idx * self.total)].flip_coins([client.uid], math.log(len(self.clients)) / (len(self.clients) * len(self.clients)))
-    elif self.policy == self.splitting:
+    elif self.policy == self.static_splitting:
       group_idx = self.splits[uid]
       good = True
       for g_uid in self.split_group[group_idx]:
@@ -402,7 +410,7 @@ class AnonymitySimulator:
       for client in self.clients:
         if client.get_online():
           client.flip_coins([uid])
-    elif self.policy == self.splitting:
+    elif self.policy == self.static_splitting:
       group_idx = self.splits[uid]
       self.group_online[group_idx] = False
 
@@ -443,7 +451,7 @@ class AnonymitySimulator:
           return False
     return self.maintain_min_anon(etime, uid, msg)
 
-  def splitting(self, etime, uid, msg, tprint = False):
+  def static_splitting(self, etime, uid, msg, tprint = False):
     group_idx = self.splits[uid]
     if not self.group_online[group_idx]:
       logging.info("%s %s %s %s" % (etime, uid, group_idx, self.split_group[group_idx]))
