@@ -41,9 +41,9 @@ def main():
       help="Filter percent bounds (default: 0)")
   parser.add_argument("-b", "--bound", default=0, type=int,
       help="Filter fixed bounds (default: 0)")
-  parser.add_argument("-s", "--start", default=0.0, type=float,
+  parser.add_argument("-s", "--start", default=0, type=float,
       help="Filter starting time (default: 0)")
-  parser.add_argument("-e", "--end", default=0.0, type=float,
+  parser.add_argument("-e", "--end", default=-1, type=float,
       help="Filter end time (default: end)")
   parser.add_argument("-n", "--interval", default=86400, type=int,
       help="Filter time interval in seconds (default:86400 -- 1 day)")
@@ -52,7 +52,7 @@ def main():
   args = parser.parse_args()
 
   msg_parser = DefaultParse(filename=args.input)
-  data_analyzer = DataAnalyzer(msg_parser.events, args.interval)
+  data_analyzer = DataAnalyzer(msg_parser.events, args.interval, args.end)
 
   if args.filter == None:
     clients = list(data_analyzer.clients.values())
@@ -142,7 +142,7 @@ class DataAnalyzer:
       return "uid: %s, online time: %s, intervals: %s, msgs: %s" % \
           (self.uid, self.online_time, self.intervals, len(self.msg_times))
 
-  def __init__(self, events, interval):
+  def __init__(self, events, interval, end):
     self.event_actions = {
         "join" : self.on_join,
         "quit" : self.on_quit,
@@ -150,6 +150,12 @@ class DataAnalyzer:
         }
 
     self.clients = {}
+
+    if end == -1:
+      self.end = events[-1][0] + 1
+    else:
+      self.end = end
+
     self.process_events(events)
 
     if interval > 0:
@@ -167,6 +173,9 @@ class DataAnalyzer:
 
   def process_events(self, events):
     for event in events:
+      if self.end < event[0]:
+        break
+
       callback = self.event_actions.get(event[1], None)
       try:
         result = callback and callback(event[0], event[2])
@@ -175,7 +184,7 @@ class DataAnalyzer:
         raise
 
     for client in self.clients.values():
-      client.finished(events[-1][0])
+      client.finished(self.end)
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
