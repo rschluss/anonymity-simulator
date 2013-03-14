@@ -138,7 +138,7 @@ class AnonymitySimulator:
     def get_online_time(self, ctime = 0):
       if ctime == 0 or self.last_time == -1:
         return self.online_time
-      return self.online + ctime - self.last_time
+      return self.online_time + ctime - self.last_time
 
     def get_online(self):
       """ Return the client's online state """
@@ -287,7 +287,7 @@ class AnonymitySimulator:
     events = self.bootstrap_trainer(events, trainer_time)
 
     clients = list(self.clients)
-    clients.sort(key=lambda client: client.online_time)
+    clients.sort(key=lambda client: client.get_online_time(trainer_time))
 
     splitting_order = []
     for client in clients:
@@ -431,9 +431,9 @@ class AnonymitySimulator:
     for g_uid in self.split_group[group]:
       if not self.clients[g_uid].get_online():
         count += 1
-#        return False
+        return False
     if count > 0:
-#      print "%s %s %s %s %s" % (etime, count, uid, g_uid, self.split_group[group])
+      print "%s %s %s %s %s" % (etime, count, uid, g_uid, self.split_group[group])
       return False
 
     return self.maintain_min_anon(etime, uid, msg)
