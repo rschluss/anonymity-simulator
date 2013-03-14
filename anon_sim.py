@@ -14,10 +14,10 @@ A user may delay exiting in order to transmit a message
 """
 
 import argparse
-import codecs
 import logging
+import math
 import pickle
-import sys
+import random
 
 class DefaultParse:
   def __init__(self, filename):
@@ -38,6 +38,8 @@ class DefaultParse:
 
 def main():
   parser = argparse.ArgumentParser(description="The AnonymitySimulator")
+  parser.add_argument("-a", "--analyze", default=False, action="store_const",
+      dest="analyze", const=True, help="Analyze not simulate")
   parser.add_argument("-i", "--input", default="data",
       help="input dataset")
   parser.add_argument("-c", "--clients_per_client", type=int, default=1,
@@ -52,37 +54,59 @@ def main():
       help="minimum value for the anonymity meter, (default: 0)")
   parser.add_argument("-r", "--round_time_span", type=float, default=2.0,
       help="specifies the duration of a round in seconds (default: 2.0)")
+  parser.add_argument("-s", "--start", type=float, default=0.0,
+      help="specifies the region between bootstrapping and evaluation "
+      "(default: 0)")
+  parser.add_argument("-e", "--end", type=float, default=-1,
+      help="specifies the end time for evaluation (default: all / -1)")
+  parser.add_argument("-t", "--trainer", default=None,
+      help="specifies a trainer for the anonymity data for splitting groups: "
+      "join, rank, or random (default: None)")
   args = parser.parse_args()
 
-  if hasattr(args, "log_level"):
-    logging.basicConfig(level=args.log_level)
+  logging.basicConfig(level=args.log_level)
 
   msg_parser = DefaultParse(filename=args.input)
   total = len(msg_parser.users)
+  trainer = None
+  if args.trainer == "join":
+    trainer = AnonymitySimulator.join_trainer
+  elif args.trainer == "rank":
+    trainer = AnonymitySimulator.rank_trainer
+  elif args.trainer == "random":
+    trainer = AnonymitySimulator.random_trainer
+
   anon_sim = AnonymitySimulator(total, msg_parser.events, \
       min_anon = args.min_anon, \
       pseudonyms_per_client = args.pseudonyms_per_client, \
       clients_per_client = args.clients_per_client, \
-      round_time_span = args.round_time_span)
+      round_time_span = args.round_time_span, \
+      trainer = trainer, \
+      trainer_time = args.start,
+      end_time = args.end)
 
   total_clients = total * args.clients_per_client
   total_pseudonyms = total * args.pseudonyms_per_client
 
   print "Total clients: %s" % (total_clients, )
   print "Total pseudonyms: %s" % (total_pseudonyms, )
+  print "Delivered messages: %s" % (anon_sim.on_time, )
   print "Lost messages: %s" % (anon_sim.lost_messages)
+  print "Delays: %s" % (anon_sim.delayed_times)
 
-  print "Clients:"
+  to_print = []
   for client in anon_sim.clients:
     if(total_pseudonyms == len(client.pseudonyms)):
       continue
-    print len(client.pseudonyms)
+    to_print.append(len(client.pseudonyms))
+  print "Clients: %s" % (to_print,)
 
-  print "Pseudonyms:"
+  to_print = []
   for pseudonym in anon_sim.pseudonyms:
     if(total_clients == len(pseudonym.clients)):
       continue
-    print len(pseudonym.clients)
+    to_print.append(len(pseudonym.clients))
+  print "Pseudonyms: %s" % (to_print,)
 
 class AnonymitySimulator:
   """ Processes a data set to calculate both the clients' and their
@@ -92,15 +116,29 @@ class AnonymitySimulator:
     def __init__(self, uid, total):
       self.uid = uid
       self.pseudonyms = {num: True for num in range(total)}
+      self.coins = {num: -1 for num in range(total)}
       self.online = False
 
-    def set_online(self):
+      self.online_time = 0
+      self.last_time = -1 
+
+      self.rand = random.Random()
+      self.rand.seed(uid)
+
+    def set_online(self, ctime):
       """ Set the client as online """
       self.online = True
+      self.last_time = ctime
 
-    def set_offline(self):
+    def set_offline(self, ctime):
       """ Set the client as offline """
       self.online = False
+      self.online_time += ctime - self.last_time
+
+    def get_online_time(self, ctime = 0):
+      if ctime == 0 or self.last_time == -1:
+        return self.online_time
+      return self.online + ctime - self.last_time
 
     def get_online(self):
       """ Return the client's online state """
@@ -117,6 +155,12 @@ class AnonymitySimulator:
       """ Remove a slot from the client's anonymity set """
       if idx in self.pseudonyms:
         del self.pseudonyms[idx]
+
+    def flip_coins(self, uids, prob = .1):
+      for uid in uids:
+        if self.coins[uid] != -1:
+          continue
+        self.coins[uid] = self.rand.random() < prob
 
   class Slot:
     """ Represents a single message session """
@@ -137,7 +181,8 @@ class AnonymitySimulator:
         del self.clients[idx]
 
   def __init__(self, total, events, min_anon = 0, pseudonyms_per_client = 1,
-      clients_per_client = 1, round_time_span = 2.0):
+      clients_per_client = 1, round_time_span = 2.0, trainer=None, trainer_time=0,
+      end_time=-1):
 
     self.event_actions = {
         "join" : self.on_join,
@@ -158,26 +203,146 @@ class AnonymitySimulator:
     self.min_anon = min_anon
     self.round_time_span = round_time_span
     self.total = total
+    self.on_time = 0
     self.lost_messages = 0
+    self.delayed_times = []
+    self.end_time = end_time
+
+    self.policy = None
+
+    if trainer_time > 0:
+      if trainer == None:
+        events = self.bootstrap_trainer(events, trainer_time)
+      else:
+        events = trainer(self, events, trainer_time)
+
+    self.policy = self.maintain_min_anon
+#    self.policy = self.coin_flip
+    self.policy = self.splitting
+
+    if self.policy == self.coin_flip:
+      uids = []
+      for client in self.clients:
+        if not client.get_online():
+          uids.append(client.uid)
+
+      for client in self.clients:
+        if client.get_online():
+          client.flip_coins(uids, 1.0 / float(len(self.clients)))
 
     self.process_events(events)
+
+  def bootstrap_trainer(self, events, trainer_time):
+    if trainer_time == 0:
+      trainer_time = self.round_time_span
+
+    to_prepend = []
+    idx = 0
+    while idx < len(events) and events[idx][0] < trainer_time:
+      event = events[idx]
+      idx += 1
+
+      if event[1] == "join":
+        self.on_join(event[0], event[2])
+      elif event[1] == "quit":
+        self.on_quit(event[0], event[2])
+      elif event[1] == "msg":
+        if trainer_time == self.round_time_span:
+          to_prepend.append(event)
+      else:
+        assert(False)
+
+    if len(to_prepend) > 0:
+      return to_prepend.extend(events[idx:])
+    return events[idx:]
+
+  def splitting_init(self, splitting_order):
+    self.split_group = []
+    self.splits = {}
+
+    groups = len(splitting_order) / self.min_anon
+    remaining = len(splitting_order) % self.min_anon
+    min_anon = self.min_anon + remaining / groups
+    remaining = remaining % groups
+
+    count = 0
+    group = []
+    group_idx = 0
+
+    for uid in splitting_order:
+      self.splits[uid] = group_idx
+      group.append(uid)
+
+      count += 1
+      if count >= min_anon:
+        if count == min_anon and remaining > 0:
+          remaining -= 1
+        else:
+          self.split_group.append(group)
+          group_idx += 1
+          count = 0
+          group = []
+
+  def rank_trainer(self, events, trainer_time):
+    events = self.bootstrap_trainer(events, trainer_time)
+
+    clients = list(self.clients)
+    clients.sort(key=lambda client: client.online_time)
+
+    splitting_order = []
+    for client in clients:
+      splitting_order.append(client.uid)
+    self.splitting_init(splitting_order)
+
+    return events
+
+  def join_trainer(self, events, trainer_time):
+    events = self.bootstrap_trainer(events, trainer_time)
+
+    splitting_order = []
+    for client in self.clients:
+      splitting_order.append(client.uid)
+    self.splitting_init(splitting_order)
+
+    return events
+
+  def random_trainer(self, events, trainer_time):
+    events = self.bootstrap_trainer(events, trainer_time)
+
+    splitting_order = range(len(self.clients))
+    rand = random.Random()
+    rand.shuffle(splitting_order)
+    self.splitting_init(splitting_order)
+
+    return events
 
   def process_events(self, events):
     events.reverse()
     delayed_msgs = []
+    msgs = []
+    
+    end_time = self.end_time if self.end_time != -1 else events[0][0] + 1.0
 
-    while len(events) > 0:
+    while len(events) > 0 and events[-1][0] < end_time:
+      for msg in delayed_msgs:
+        if msg not in msgs:
+          msg_time = msg[0] + self.round_time_span - (msg[0] % self.round_time_span)
+          self.delayed_times.append(next_time - msg_time)
+
       to_quit = []
-      msgs = delayed_msgs
-      delayed_msgs = []
+      delayed_msgs = list(msgs)
 
       # Move us to the period during the next event
-      next_time = events[-1][0] + 2.0 - (events[-1][0] % self.round_time_span)
+      next_time = events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span)
+      joined = {}
 
       while len(events) > 0 and events[-1][0] < next_time:
         event = events.pop()
+        assert( event[0] < next_time)
+        assert( event[0] < end_time)
         if event[1] == "join":
           self.on_join(event[0], event[2])
+          joined[event[2]] = True
         elif event[1] == "msg":
           msgs.append(event)
         elif event[1] == "quit":
@@ -185,27 +350,43 @@ class AnonymitySimulator:
         else:
           assert(False)
 
+      to_delay = []
       for event in msgs:
         if not self.on_msg(event[0], event[2]):
-          delayed_msgs.append(event)
+          to_delay.append(event)
+        elif event not in delayed_msgs:
+          self.on_time += 1
+      msgs = to_delay
 
       for event in to_quit:
+        if event[2] in joined:
+          continue
         self.on_quit(event[0], event[2])
 
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
-    self.lost_messages += len(delayed_msgs)
-
+    self.lost_messages += len(msgs)
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
     for idx in range(self.clients_per_client):
-      self.clients[uid + (idx * self.total)].set_online()
+      self.clients[uid + (idx * self.total)].set_online(etime)
+
+    if self.policy == self.coin_flip:
+      for client in self.clients:
+        if not client.get_online():
+          for idx in range(self.clients_per_client):
+            self.clients[uid + (idx * self.total)].flip_coins([client.uid], math.log(len(self.clients)) / (len(self.clients) * len(self.clients)))
 
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """
     for idx in range(self.clients_per_client):
-      self.clients[uid + (idx * self.total)].set_offline()
+      self.clients[uid + (idx * self.total)].set_offline(etime)
+
+    if self.policy == self.coin_flip:
+      for client in self.clients:
+        if client.get_online():
+          client.flip_coins([uid])
 
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
@@ -213,18 +394,49 @@ class AnonymitySimulator:
       # Should be a delayed event!
       return False
 
+    if self.policy(etime, uid, msg):
+      for client in self.clients:
+        if not client.get_online():
+          client.remove_slot(uid)
+          self.pseudonyms[uid].remove_client(client.uid)
+      return True
+    return False
+
+  def maintain_min_anon(self, etime, uid, msg):
     for client in self.clients:
       if not client.get_online():
         if client.remove_if(uid) <= self.min_anon or \
             self.pseudonyms[uid].remove_if(client.uid) <= self.min_anon:
           return False
 
-    for client in self.clients:
-      if not client.get_online():
-        client.remove_slot(uid)
-        self.pseudonyms[uid].remove_client(client.uid)
-
     return True
+
+  def always(self, etime, uid, msg):
+    return True
+
+  def coin_flip(self, etime, uid, msg):
+    for idx in range(self.clients_per_client):
+      pclient = self.clients[uid + (idx * self.total)]
+      for client in self.clients:
+        if client.get_online():
+          continue
+        assert(pclient.coins[client.uid] != -1)
+        if pclient.coins[client.uid]:
+          return False
+    return self.maintain_min_anon(etime, uid, msg)
+
+  def splitting(self, etime, uid, msg):
+    group = self.splits[uid]
+    count = 0
+    for g_uid in self.split_group[group]:
+      if not self.clients[g_uid].get_online():
+        count += 1
+#        return False
+    if count > 0:
+#      print "%s %s %s %s %s" % (etime, count, uid, g_uid, self.split_group[group])
+      return False
+
+    return self.maintain_min_anon(etime, uid, msg)
 
 if __name__ == "__main__":
   main()
