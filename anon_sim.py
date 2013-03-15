@@ -64,7 +64,7 @@ def main():
       "groups: join, rank, or random (default: None)")
   parser.add_argument("-x", "--policy", default="min_anon",
       help="specifies the policy for the simulator: "
-      "min_anon, static_split, dynamic_split (default: min_anon)")
+      "min_anon, split (default: min_anon)")
   args = parser.parse_args()
 
   logging.basicConfig(level=args.log_level)
@@ -150,14 +150,14 @@ class AnonymitySimulator:
       return self.online
 
     def remove_if(self, idx):
-      """ Returns the count if the slot was removed """
+      """ Returns the count if the nym was removed """
       count = len(self.pseudonyms)
       if idx in self.pseudonyms:
         count -= 1
       return count
 
-    def remove_slot(self, idx):
-      """ Remove a slot from the client's anonymity set """
+    def remove_nym(self, idx):
+      """ Remove a nym from the client's anonymity set """
       if idx in self.pseudonyms:
         del self.pseudonyms[idx]
 
@@ -167,7 +167,7 @@ class AnonymitySimulator:
           continue
         self.coins[uid] = self.rand.random() < prob
 
-  class Slot:
+  class Pseudonym:
     """ Represents a single message session """
     def __init__(self, uid, total):
       self.uid = uid
@@ -181,7 +181,7 @@ class AnonymitySimulator:
       return count
 
     def remove_client(self, idx):
-      """ Remove a client from the slot's anonymity set """
+      """ Remove a client from the nym's anonymity set """
       if idx in self.clients:
         del self.clients[idx]
 
@@ -202,7 +202,7 @@ class AnonymitySimulator:
 
     self.clients = [AnonymitySimulator.Client(uid, total_pseudonyms) \
         for uid in range(total_clients)]
-    self.pseudonyms = [AnonymitySimulator.Slot(uid, total_clients) \
+    self.pseudonyms = [AnonymitySimulator.Pseudonym(uid, total_clients) \
         for uid in range(total_pseudonyms)]
 
     self.clients_per_client = clients_per_client
@@ -220,14 +220,13 @@ class AnonymitySimulator:
     if trainer_time > 0:
       if trainer == None:
         events = self.bootstrap_trainer(events, trainer_time)
+        self.dynamic_splitting_init()
       else:
         events = trainer(self, events, trainer_time)
 
     self.policy = self.maintain_min_anon
-    if policy == "static_split":
-      self.policy = self.static_splitting
-    elif policy == "dynamic_split":
-      pass
+    if policy == "split":
+      self.policy = self.splitting
 
     if self.policy == self.coin_flip:
       uids = []
@@ -265,10 +264,21 @@ class AnonymitySimulator:
       return to_prepend.extend(events[idx:])
     return events[idx:]
 
+  def dynamic_splitting_init(self):
+    self.group_online = []
+    self.split_group = []
+    self.splits = {}
+    self.join_queue = []
+    self.offline_clients = []
+    for client in self.clients:
+      if not client.get_online():
+        self.offline_clients.append(client.uid)
+
   def static_splitting_init(self, splitting_order):
     self.group_online = []
     self.split_group = []
     self.splits = {}
+    self.offline_clients = []
 
     groups = len(splitting_order) / self.min_anon
     remaining = len(splitting_order) % self.min_anon
@@ -343,22 +353,23 @@ class AnonymitySimulator:
           msg_time = msg[0] + self.round_time_span - (msg[0] % self.round_time_span)
           self.delayed_times.append(next_time - msg_time)
 
-      to_quit = []
       delayed_msgs = list(msgs)
 
       # Move us to the period during the next event
       next_time = min(events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span), end_time)
-      joined = {}
+      quit = {}
 
       while len(events) > 0 and events[-1][0] < next_time:
         event = events.pop()
         if event[1] == "join":
+          if event[2] in quit:
+            del quit[event[2]]
+            continue
           self.on_join(event[0], event[2])
-          joined[event[2]] = True
         elif event[1] == "msg":
           msgs.append(event)
         elif event[1] == "quit":
-          to_quit.append(event)
+          quit[event[2]] = event[0]
         else:
           assert(False)
 
@@ -370,16 +381,15 @@ class AnonymitySimulator:
           self.on_time += 1
       msgs = to_delay
 
-      for event in to_quit:
-        if event[2] in joined:
-          continue
-        self.on_quit(event[0], event[2])
+      for uid, etime in quit.items():
+        self.on_quit(etime, uid)
 
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
     self.lost_messages += len(msgs)
-    for msg in msgs:
-      self.static_splitting(msg[0],msg[2][0], msg[2][1], True)
+    if self.policy == self.splitting:
+      for msg in msgs:
+        self.splitting(msg[0],msg[2][0], msg[2][1], True)
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
@@ -390,16 +400,33 @@ class AnonymitySimulator:
       for client in self.clients:
         if not client.get_online():
           for idx in range(self.clients_per_client):
-            self.clients[uid + (idx * self.total)].flip_coins([client.uid], math.log(len(self.clients)) / (len(self.clients) * len(self.clients)))
-    elif self.policy == self.static_splitting:
-      group_idx = self.splits[uid]
-      good = True
-      for g_uid in self.split_group[group_idx]:
-        if not self.clients[g_uid].get_online():
-          good = False
-          break
-      if good:
-        self.group_online[group_idx] = True
+            self.clients[uid + (idx * self.total)].flip_coins( \
+                [client.uid], math.log(len(self.clients)) / \
+                (len(self.clients) * len(self.clients)))
+    elif self.policy == self.splitting:
+      if uid not in self.splits:
+        if uid not in self.join_queue:
+          assert(uid in self.offline_clients)
+          self.join_queue.append(uid)
+        if len(self.join_queue) >= self.min_anon:
+          group_idx = len(self.split_group)
+          group = []
+          for g_uid in self.join_queue:
+            self.offline_clients.remove(g_uid)
+            self.splits[g_uid] = group_idx
+            group.append(g_uid)
+          self.split_group.append(group)
+          self.group_online.append(True)
+          self.join_queue = []
+      else:
+        group_idx = self.splits[uid]
+        good = True
+        for g_uid in self.split_group[group_idx]:
+          if not self.clients[g_uid].get_online():
+            good = False
+            break
+        if good:
+          self.group_online[group_idx] = True
 
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """
@@ -410,9 +437,39 @@ class AnonymitySimulator:
       for client in self.clients:
         if client.get_online():
           client.flip_coins([uid])
-    elif self.policy == self.static_splitting:
-      group_idx = self.splits[uid]
-      self.group_online[group_idx] = False
+    elif self.policy == self.splitting:
+      if uid not in self.splits:
+        # Dynamic splitting bootstrapping code
+        if uid in self.join_queue:
+          self.join_queue.remove(uid)
+        else:
+          clients = []
+          for client in self.clients:
+            if client.get_online() and \
+                client.uid not in self.splits and \
+                client.uid not in self.join_queue:
+              clients.append(client)
+
+          clients.sort(key=lambda client: client.get_online_time(etime))
+
+          group_idx = len(self.split_group)
+          self.splits[uid] = group_idx
+          group = [uid]
+          count = self.min_anon - 1 if (2 * self.min_anon - 1 < len(clients)) \
+              else len(clients)
+          for idx in range(count):
+            self.splits[clients[idx].uid] = group_idx
+            group.append(clients[idx].uid)
+          self.split_group.append(group)
+          self.group_online.append(False)
+
+          for idx in group:
+            for jdx in group:
+              assert(idx in self.pseudonyms[jdx].clients)
+      else:
+        # Terminal splitting codde
+        group_idx = self.splits[uid]
+        self.group_online[group_idx] = False
 
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
@@ -423,8 +480,11 @@ class AnonymitySimulator:
     if self.policy(etime, uid, msg):
       for client in self.clients:
         if not client.get_online():
-          client.remove_slot(uid)
+          client.remove_nym(uid)
           self.pseudonyms[uid].remove_client(client.uid)
+      for client in self.offline_clients:
+        self.clients[client].remove_nym(uid)
+        self.pseudonyms[uid].remove_client(client)
       return True
     return False
 
@@ -451,18 +511,44 @@ class AnonymitySimulator:
           return False
     return self.maintain_min_anon(etime, uid, msg)
 
-  def static_splitting(self, etime, uid, msg, tprint = False):
+  def splitting(self, etime, uid, msg, tprint = False):
+    if uid not in self.splits:
+      if uid in self.join_queue:
+        return False
+      return True
+
     group_idx = self.splits[uid]
     if not self.group_online[group_idx]:
       logging.info("%s %s %s %s" % (etime, uid, group_idx, self.split_group[group_idx]))
       return False
 
+    before = len(self.pseudonyms[uid].clients)
+    before_group = self.pseudonyms[uid].clients
     group_idx = 0
+
     for online in self.group_online:
       if not online:
         for g_uid in self.split_group[group_idx]:
+          self.clients[g_uid].remove_nym(uid)
           self.pseudonyms[uid].remove_client(g_uid)
       group_idx += 1
+
+    # Remove non-bootstrapped clients
+    for client in self.offline_clients:
+      self.clients[client].remove_nym(uid)
+      self.pseudonyms[uid].remove_client(client)
+    after = len(self.pseudonyms[uid].clients)
+    group_idx = self.splits[uid]
+
+    for client in self.split_group[group_idx]:
+      assert(client in self.pseudonyms[uid].clients)
+
+    if before != after:
+      logging.debug("Next: %s %s %s %s %s" % (before, after, uid, group_idx, len(self.split_group[group_idx])))
+      logging.debug("Before: %s" % (before_group))
+      logging.debug("After: %s" % (self.pseudonyms[uid].clients))
+      logging.debug("Group: %s" % (self.split_group[group_idx]))
+
     return True
     """
     # Old code
