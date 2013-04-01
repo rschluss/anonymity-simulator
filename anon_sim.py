@@ -63,6 +63,8 @@ def main():
   parser.add_argument("-x", "--policy", default="min_anon",
       help="specifies the policy for the simulator: "
       "min_anon, split (default: min_anon)")
+  parser.add_argument("-z", "--split_size", type=int, default=1,
+      help="defines the buddy sizes for the splitting algorithm")
   args = parser.parse_args()
 
   logging.basicConfig(level=args.log_level)
@@ -83,7 +85,9 @@ def main():
         pseudonyms_per_client = args.pseudonyms_per_client,
         round_time_span = args.round_time_span,
         start_time = args.start,
-        end_time = args.end)
+        end_time = args.end,
+        trainer = args.trainer,
+        split_size = args.split_size)
   elif args.policy == "static_split":
     anon_sim = StaticSplitting(total, msg_parser.events,
         min_anon = args.min_anon,
@@ -91,7 +95,8 @@ def main():
         round_time_span = args.round_time_span,
         start_time = args.start,
         end_time = args.end,
-        trainer = args.trainer)
+        trainer = args.trainer,
+        split_size = args.split_size)
 
   anon_sim.run()
 
@@ -315,8 +320,8 @@ class AnonymitySimulator:
     # Maintain min anon
     for client in self.clients:
       if not client.get_online():
-        if client.remove_if(uid) <= self.min_anon or \
-            self.pseudonyms[uid].remove_if(client.uid) <= self.min_anon:
+        if client.remove_if(uid) < self.min_anon or \
+            self.pseudonyms[uid].remove_if(client.uid) < self.min_anon:
           return False
 
     for client in self.clients:
@@ -328,7 +333,7 @@ class AnonymitySimulator:
 class DynamicSplitting(AnonymitySimulator):
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time = 0, end_time = -1):
+      start_time = 0, end_time = -1, trainer = None, split_size = 1):
     AnonymitySimulator.__init__(self, total, events, min_anon,
         pseudonyms_per_client, round_time_span, start_time, end_time)
 
@@ -337,6 +342,7 @@ class DynamicSplitting(AnonymitySimulator):
     self.splits = {}
     self.join_queue = []
     self.offline_clients = []
+    self.split_size = split_size
 
   def run(self):
     for client in self.clients:
@@ -353,7 +359,7 @@ class DynamicSplitting(AnonymitySimulator):
       if uid not in self.join_queue:
         assert(uid in self.offline_clients)
         self.join_queue.append(uid)
-      if len(self.join_queue) >= self.min_anon:
+      if len(self.join_queue) >= self.split_size:
         group_idx = len(self.split_group)
         group = []
         for g_uid in self.join_queue:
@@ -394,7 +400,7 @@ class DynamicSplitting(AnonymitySimulator):
         group_idx = len(self.split_group)
         self.splits[uid] = group_idx
         group = [uid]
-        count = self.min_anon - 1 if (2 * self.min_anon - 1 < len(clients)) \
+        count = self.split_size - 1 if (2 * self.split_size - 1 < len(clients)) \
             else len(clients)
         for idx in range(count):
           self.splits[clients[idx].uid] = group_idx
@@ -460,11 +466,12 @@ class DynamicSplitting(AnonymitySimulator):
 class StaticSplitting(DynamicSplitting):
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time = 0, end_time = -1, trainer = None):
+      start_time = 0, end_time = -1, trainer = None,
+      split_size = 1):
 
     DynamicSplitting.__init__(self, total, events, min_anon,
         pseudonyms_per_client, round_time_span,
-        start_time, end_time)
+        start_time, end_time, None, split_size)
 
     self.trainer = trainer
 
@@ -476,9 +483,9 @@ class StaticSplitting(DynamicSplitting):
     else:
       splitting_order = self.random_trainer()
 
-    groups = len(splitting_order) / self.min_anon
-    remaining = len(splitting_order) % self.min_anon
-    min_anon = self.min_anon + remaining / groups
+    groups = len(splitting_order) / self.split_size
+    remaining = len(splitting_order) % self.split_size
+    split_size = self.split_size + remaining / groups
     remaining = remaining % groups
 
     count = 0
@@ -492,8 +499,8 @@ class StaticSplitting(DynamicSplitting):
       online = online and self.clients[uid].get_online()
 
       count += 1
-      if count >= min_anon:
-        if count == min_anon and remaining > 0:
+      if count >= split_size:
+        if count == split_size and remaining > 0:
           remaining -= 1
         else:
           self.split_group.append(group)
