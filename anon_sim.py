@@ -65,6 +65,9 @@ def main():
       "min_anon, split (default: min_anon)")
   parser.add_argument("-z", "--split_size", type=int, default=1,
       help="defines the buddy sizes for the splitting algorithm")
+  parser.add_argument("--percent", type=float, default=1.0,
+      help="models the adversaries guess that a pseudonym would be active"
+      "if the member were online")
   args = parser.parse_args()
 
   logging.basicConfig(level=args.log_level)
@@ -123,6 +126,80 @@ def main():
       continue
     to_print.append(len(pseudonym.clients))
   print "Pseudonyms: %s" % (to_print,)
+
+  to_print = []
+  result = {}
+  for pseudonym in anon_sim.pseudonyms:
+    if(total_clients == len(pseudonym.clients)):
+      continue
+    max_idx = -1
+    max_value = 0
+    own_rank = 0
+    own_value = pseudonym.client_rank[pseudonym.uid]
+    for cuid in pseudonym.client_rank.keys():
+      cvalue = pseudonym.client_rank[cuid]
+      if cvalue > max_value:
+        max_value = cvalue
+        max_idx = cuid
+      if cvalue > own_value:
+        own_rank += 1
+    result[pseudonym.uid] = max_idx
+    to_print.append((pseudonym.uid, max_idx, max_value, own_rank, own_value))
+
+  change = True
+  kdx = 0
+  while change:
+    jdx = 0
+    change = False
+    kdx += 1
+    for item0 in result.keys():
+      jdx += 1
+      for item1 in result.keys():
+        if item0 == item1:
+          continue
+        if result[item0] != result[item1]:
+          continue
+        idx = result[item0]
+        val0 = anon_sim.pseudonyms[item0].client_rank[idx]
+        val1 = anon_sim.pseudonyms[item1].client_rank[idx]
+        to_swap = item0
+        val_swap = val0
+        if val1 < val0:
+          to_swap = item1
+          val_swap = val1
+        else:
+          continue
+
+        next_val = 0
+        next_idx = -1
+        for uid in anon_sim.pseudonyms[to_swap].client_rank.keys():
+          if uid == idx:
+            continue
+          rank =  anon_sim.pseudonyms[to_swap].client_rank[uid]
+          if rank >= val_swap or rank <= next_val:
+            continue
+          next_val = rank
+          next_idx = uid
+
+        if next_idx == -1:
+          continue
+        print "%s %s %s" % (to_swap, result[to_swap], next_idx)
+        result[to_swap] = next_idx
+        change = True
+
+  print "Pseudonyms' Ranks: "
+  found0 = 0
+  found1 = 0
+  for top in to_print:
+    found0_0 = top[0] == top[1]
+    found1_0 = result[top[0]] == top[0]
+    print "\t%s -- %s -- %s -- %s" % (found0_0, found1_0, top, result[top[0]])
+    if found1_0:
+      found1 += 1
+    if found0_0:
+      found0 += 1
+  print "Found: %s -- %s" % (found0, found1)
+
 
 class AnonymitySimulator:
   """ Processes a data set to calculate both the clients' and their
@@ -184,6 +261,7 @@ class AnonymitySimulator:
     def __init__(self, uid, total):
       self.uid = uid
       self.clients = {num: True for num in range(total)}
+      self.client_rank = {num: 1.0 for num in range(total)}
 
     def remove_if(self, idx):
       """ Returns the count if the client was removed """
@@ -196,6 +274,7 @@ class AnonymitySimulator:
       """ Remove a client from the nym's anonymity set """
       if idx in self.clients:
         del self.clients[idx]
+        del self.client_rank[idx]
 
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
@@ -223,6 +302,7 @@ class AnonymitySimulator:
     self.on_time = 0
     self.delayed_times = []
     self.end_time = end_time
+    self.percent = .01
 
     self.events = self.bootstrap(events)
 
@@ -246,7 +326,8 @@ class AnonymitySimulator:
         assert(False)
 
     if len(to_prepend) > 0:
-      return to_prepend.extend(events[idx:])
+      to_prepend.extend(events[idx:])
+      return to_prepend
     return events[idx:]
 
   def run(self):
@@ -258,6 +339,7 @@ class AnonymitySimulator:
     msgs = []
     
     end_time = self.end_time if self.end_time != -1 else events[0][0] + 1.0
+    next_time = self.round_time_span
 
     while len(events) > 0 and events[-1][0] < end_time:
       for msg in delayed_msgs:
@@ -268,7 +350,8 @@ class AnonymitySimulator:
       delayed_msgs = list(msgs)
 
       # Move us to the period during the next event
-      next_time = min(events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span), end_time)
+#      next_time = min(events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span), end_time)
+      next_time += self.round_time_span
       quit = {}
 
       while len(events) > 0 and events[-1][0] < next_time:
@@ -286,12 +369,22 @@ class AnonymitySimulator:
           assert(False)
 
       to_delay = []
+      delivered = {}
       for event in msgs:
         if not self.on_msg(event[0], event[2]):
           to_delay.append(event)
-        elif event not in delayed_msgs:
-          self.on_time += 1
+        else:
+          delivered[event[2][0]] = True
+          if event not in delayed_msgs:
+            self.on_time += 1
       msgs = to_delay
+
+      for nym in self.pseudonyms:
+        if nym.uid in delivered:
+          continue
+        for cuid in nym.client_rank.keys():
+          if self.clients[cuid].get_online():
+            nym.client_rank[cuid] *= (1 - self.percent)
 
       for uid, etime in quit.items():
         self.on_quit(etime, uid)
