@@ -20,7 +20,7 @@ import pickle
 import random
 
 class DefaultParse:
-  def __init__(self, filename):
+  def __init__(self, filename, end):
     self.events = []
     self.users = {}
     f = open(filename, "rb")
@@ -28,9 +28,16 @@ class DefaultParse:
     while True:
       try:
         event = pickle.load(f)
-        self.events.append(event)
+        if 0 < end and end < event[0]:
+          break
         if event[1] == "join" and event[2] not in  self.users:
-          self.users[event[2]] = event[2]
+          self.users[event[2]] = len(self.users)
+        # Remap users
+        if event[1] == "msg":
+          event = (event[0], event[1], (self.users[event[2][0]], event[2][1]))
+        else:
+          event = (event[0], event[1], self.users[event[2]])
+        self.events.append(event)
       except EOFError:
         break
 
@@ -72,7 +79,7 @@ def main():
 
   logging.basicConfig(level=args.log_level)
 
-  msg_parser = DefaultParse(filename=args.input)
+  msg_parser = DefaultParse(filename=args.input, end=args.end)
   total = len(msg_parser.users)
 
   if args.policy == "min_anon":
@@ -80,15 +87,13 @@ def main():
         min_anon = args.min_anon,
         pseudonyms_per_client = args.pseudonyms_per_client,
         round_time_span = args.round_time_span,
-        start_time = args.start,
-        end_time = args.end)
+        start_time = args.start)
   elif args.policy == "dynamic_split":
     anon_sim = DynamicSplitting(total, msg_parser.events,
         min_anon = args.min_anon,
         pseudonyms_per_client = args.pseudonyms_per_client,
         round_time_span = args.round_time_span,
         start_time = args.start,
-        end_time = args.end,
         trainer = args.trainer,
         split_size = args.split_size)
   elif args.policy == "static_split":
@@ -97,7 +102,6 @@ def main():
         pseudonyms_per_client = args.pseudonyms_per_client,
         round_time_span = args.round_time_span,
         start_time = args.start,
-        end_time = args.end,
         trainer = args.trainer,
         split_size = args.split_size)
 
@@ -194,7 +198,6 @@ def main():
 
         if next_idx == -1:
           continue
-        print "%s %s %s" % (to_swap, result[to_swap], next_idx)
         result[to_swap] = next_idx
         change = True
 
@@ -289,7 +292,7 @@ class AnonymitySimulator:
 
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time=0, end_time=-1):
+      start_time=0):
 
     self.event_actions = {
         "join" : self.on_join,
@@ -312,7 +315,6 @@ class AnonymitySimulator:
     self.start_time = start_time
     self.on_time = 0
     self.delayed_times = []
-    self.end_time = end_time
     self.percent = .01
 
     self.events = self.bootstrap(events)
@@ -349,10 +351,9 @@ class AnonymitySimulator:
     delayed_msgs = []
     msgs = []
     
-    end_time = self.end_time if self.end_time != -1 else events[0][0] + 1.0
     next_time = self.round_time_span
 
-    while len(events) > 0 and events[-1][0] < end_time:
+    while len(events) > 0:
       for msg in delayed_msgs:
         if msg not in msgs:
           msg_time = msg[0] + self.round_time_span - (msg[0] % self.round_time_span)
@@ -361,7 +362,7 @@ class AnonymitySimulator:
       delayed_msgs = list(msgs)
 
       # Move us to the period during the next event
-#      next_time = min(events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span), end_time)
+#      next_time = events[-1][0] + self.round_time_span - (events[-1][0] % self.round_time_span)
       next_time += self.round_time_span
       quit = {}
 
@@ -448,9 +449,9 @@ class AnonymitySimulator:
 class DynamicSplitting(AnonymitySimulator):
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time = 0, end_time = -1, trainer = None, split_size = 1):
+      start_time = 0, trainer = None, split_size = 1):
     AnonymitySimulator.__init__(self, total, events, min_anon,
-        pseudonyms_per_client, round_time_span, start_time, end_time)
+        pseudonyms_per_client, round_time_span, start_time)
 
     self.group_online = []
     self.split_group = []
@@ -584,12 +585,12 @@ class DynamicSplitting(AnonymitySimulator):
 class StaticSplitting(DynamicSplitting):
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time = 0, end_time = -1, trainer = None,
+      start_time = 0, trainer = None,
       split_size = 1):
 
     DynamicSplitting.__init__(self, total, events, min_anon,
         pseudonyms_per_client, round_time_span,
-        start_time, end_time, None, split_size)
+        start_time, None, split_size)
 
     self.trainer = trainer
 
@@ -654,9 +655,9 @@ class StaticSplitting(DynamicSplitting):
 class CoinFlip(AnonymitySimulator):
   def __init__(self, total, events, min_anon = 0,
       pseudonyms_per_client = 1, round_time_span = 2.0,
-      start_time = 0, end_time = -1):
+      start_time = 0):
     AnonymitySimulator.__init__(total, events, min_anon,
-        pseudonyms_per_client, round_time_span, start_time, end_time)
+        pseudonyms_per_client, round_time_span, start_time)
 
   def run(self):
     uids = []
