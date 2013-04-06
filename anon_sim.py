@@ -135,16 +135,27 @@ def main():
     max_idx = -1
     max_value = 0
     own_rank = 0
+    accumulated = 0
+    same = 0
+    near = 0
     own_value = pseudonym.client_rank[pseudonym.uid]
+    up_own = own_value * 1.1
+    down_own = own_value * 0.9
     for cuid in pseudonym.client_rank.keys():
       cvalue = pseudonym.client_rank[cuid]
+      accumulated += cvalue
       if cvalue > max_value:
         max_value = cvalue
         max_idx = cuid
       if cvalue > own_value:
         own_rank += 1
+      if cvalue == own_value:
+        same += 1
+      if cvalue > down_own and cvalue < up_own:
+        near += 1
     result[pseudonym.uid] = max_idx
-    to_print.append((pseudonym.uid, max_idx, max_value, own_rank, own_value))
+    prob = float(own_value) / float(accumulated)
+    to_print.append((pseudonym.uid, max_idx, max_value, own_rank, own_value, same, near, prob))
 
   change = True
   kdx = 0
@@ -383,7 +394,7 @@ class AnonymitySimulator:
         if nym.uid in delivered:
           continue
         for cuid in nym.client_rank.keys():
-          if self.clients[cuid].get_online():
+          if self.is_member_online(cuid):
             nym.client_rank[cuid] *= (1 - self.percent)
 
       for uid, etime in quit.items():
@@ -406,21 +417,32 @@ class AnonymitySimulator:
 
   def on_msg(self, etime, (uid, msg)):
     """ Handler for the client message post event """
-    if not self.clients[uid].get_online():
+    if not self.is_member_online(uid):
       # Should be a delayed event!
       return False
 
-    # Maintain min anon
-    for client in self.clients:
-      if not client.get_online():
-        if client.remove_if(uid) < self.min_anon or \
-            self.pseudonyms[uid].remove_if(client.uid) < self.min_anon:
-          return False
+    if not self.check_min_anon(uid):
+      return False
 
     for client in self.clients:
-      if not client.get_online():
+      if not self.is_member_online(client.uid):
         client.remove_nym(uid)
         self.pseudonyms[uid].remove_client(client.uid)
+    return True
+
+  def is_member_online(self, uid):
+    return self.clients[uid].get_online()
+
+  def check_min_anon(self, uid):
+    clients_offline = 0
+    for client in self.clients:
+      if not self.is_member_online(client.uid):
+        if client.remove_if(uid) < self.min_anon:
+          return False
+        if client.uid in self.pseudonyms[uid].clients:
+          clients_offline += 1
+          if len(self.pseudonyms[uid].clients) - clients_offline < self.min_anon:
+            return False
     return True
 
 class DynamicSplitting(AnonymitySimulator):
@@ -444,6 +466,16 @@ class DynamicSplitting(AnonymitySimulator):
 
     AnonymitySimulator.run(self)
 
+  def is_member_online(self, uid):
+    if not self.clients[uid].get_online():
+      return False
+
+    if uid not in self.splits:
+      if uid in self.join_queue:
+        return False
+      return True
+    return self.group_online[self.splits[uid]]
+
   def on_join(self, etime, uid):
     """ Handler for the client join event """
     self.clients[uid].set_online(etime)
@@ -464,13 +496,10 @@ class DynamicSplitting(AnonymitySimulator):
         self.join_queue = []
     else:
       group_idx = self.splits[uid]
-      good = True
+      self.group_online[group_idx] = True
       for g_uid in self.split_group[group_idx]:
         if not self.clients[g_uid].get_online():
-          good = False
-          break
-      if good:
-        self.group_online[group_idx] = True
+          self.group_online[group_idx] = False
 
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """
@@ -505,24 +534,17 @@ class DynamicSplitting(AnonymitySimulator):
           for jdx in group:
             assert(idx in self.pseudonyms[jdx].clients)
     else:
-      # Terminal splitting codde
+      # Terminal splitting code
       group_idx = self.splits[uid]
       self.group_online[group_idx] = False
 
   def on_msg(self, etime, (uid, msg), tprint = False):
     """ Handler for the client message post event """
-    if not self.clients[uid].get_online():
+    if not self.is_member_online(uid):
       # Should be a delayed event!
       return False
 
-    if uid not in self.splits:
-      if uid in self.join_queue:
-        return False
-      return True
-
-    group_idx = self.splits[uid]
-    if not self.group_online[group_idx]:
-      logging.info("%s %s %s %s" % (etime, uid, group_idx, self.split_group[group_idx]))
+    if not self.check_min_anon(uid):
       return False
 
     before = len(self.pseudonyms[uid].clients)
@@ -541,6 +563,9 @@ class DynamicSplitting(AnonymitySimulator):
     for client in self.offline_clients:
       self.clients[client].remove_nym(uid)
       self.pseudonyms[uid].remove_client(client)
+
+    if uid not in self.splits:
+      return True
 
     after = len(self.pseudonyms[uid].clients)
     group_idx = self.splits[uid]
