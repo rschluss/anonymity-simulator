@@ -72,9 +72,8 @@ def main():
       "min_anon, split (default: min_anon)")
   parser.add_argument("-z", "--split_size", type=int, default=1,
       help="defines the buddy sizes for the splitting algorithm")
-  parser.add_argument("--percent", type=float, default=1.0,
-      help="models the adversaries guess that a pseudonym would be active"
-      "if the member were online")
+  parser.add_argument("--output", default=None,
+      help="where output pickles can be written (default: disabled)")
   args = parser.parse_args()
 
   logging.basicConfig(level=args.log_level)
@@ -136,22 +135,22 @@ def main():
   for pseudonym in anon_sim.pseudonyms:
     if(total_clients == len(pseudonym.clients)):
       continue
-    max_idx = -1
-    max_value = 0
     own_rank = 0
     accumulated = 0
     same = 0
     near = 0
     own_value = pseudonym.client_rank[pseudonym.uid]
+    max_idx = pseudonym.uid
+    max_value = own_value
     up_own = own_value * 1.1
     down_own = own_value * 0.9
     for cuid in pseudonym.client_rank.keys():
       cvalue = pseudonym.client_rank[cuid]
       accumulated += cvalue
-      if cvalue > max_value:
+      if max_value < cvalue:
         max_value = cvalue
         max_idx = cuid
-      if cvalue > own_value:
+      if own_value < cvalue:
         own_rank += 1
       if cvalue == own_value:
         same += 1
@@ -214,6 +213,13 @@ def main():
       found0 += 1
   print "Found: %s -- %s" % (found0, found1)
 
+  if args.output:
+    output = open(args.output, "w+")
+    pickle.dump(anon_sim.on_time, output)
+    pickle.dump(len(anon_sim.lost_messages), output)
+    pickle.dump(anon_sim.delayed_times, output)
+    pickle.dump(anon_sim.pseudonyms, output)
+    pickle.dump(anon_sim.clients, output)
 
 class AnonymitySimulator:
   """ Processes a data set to calculate both the clients' and their
@@ -275,7 +281,7 @@ class AnonymitySimulator:
     def __init__(self, uid, total):
       self.uid = uid
       self.clients = {num: True for num in range(total)}
-      self.client_rank = {num: 1.0 for num in range(total)}
+      self.client_rank = {num: 1 for num in range(total)}
 
     def remove_if(self, idx):
       """ Returns the count if the client was removed """
@@ -315,7 +321,6 @@ class AnonymitySimulator:
     self.start_time = start_time
     self.on_time = 0
     self.delayed_times = []
-    self.percent = .01
 
     self.events = self.bootstrap(events)
 
@@ -363,8 +368,8 @@ class AnonymitySimulator:
       if rounds > 1:
         for nym in self.pseudonyms:
           for cuid in nym.client_rank.keys():
-            if self.is_member_online(cuid):
-              nym.client_rank[cuid] *= math.pow(1 - self.percent, rounds - 1)
+            if not self.is_member_online(cuid):
+              nym.client_rank[cuid] += rounds - 1
 
       quit = {}
       join_event = False
@@ -409,8 +414,8 @@ class AnonymitySimulator:
         if nym.uid in delivered:
           continue
         for cuid in nym.client_rank.keys():
-          if self.is_member_online(cuid):
-            nym.client_rank[cuid] *= (1 - self.percent)
+          if not self.is_member_online(cuid):
+            nym.client_rank[cuid] += 1
 
       for uid, etime in quit.items():
         self.on_quit(etime, uid)
