@@ -157,7 +157,10 @@ def main():
       if cvalue > down_own and cvalue < up_own:
         near += 1
     result[pseudonym.uid] = max_idx
-    prob = float(own_value) / float(accumulated)
+    if accumulated == 0:
+      prob = 1 / len(pseudonym.clients)
+    else:
+      prob = float(own_value) / float(accumulated)
     to_print.append((pseudonym.uid, max_idx, max_value, own_rank, own_value, same, near, prob))
 
   change = True
@@ -281,7 +284,8 @@ class AnonymitySimulator:
     def __init__(self, uid, total):
       self.uid = uid
       self.clients = {num: True for num in range(total)}
-      self.client_rank = {num: 1 for num in range(total)}
+      self.client_rank = {num: 0 for num in range(total)}
+      self.client_subrank = {num: 0 for num in range(total)}
 
     def remove_if(self, idx):
       """ Returns the count if the client was removed """
@@ -370,6 +374,8 @@ class AnonymitySimulator:
           for cuid in nym.client_rank.keys():
             if not self.is_member_online(cuid):
               nym.client_rank[cuid] += rounds - 1
+              if not self.clients[cuid].get_online():
+                nym.client_subrank[cuid] += rounds - 1
 
       quit = {}
       join_event = False
@@ -416,6 +422,8 @@ class AnonymitySimulator:
         for cuid in nym.client_rank.keys():
           if not self.is_member_online(cuid):
             nym.client_rank[cuid] += 1
+            if not self.clients[cuid].get_online():
+              nym.client_subrank[cuid] += 1
 
       for uid, etime in quit.items():
         self.on_quit(etime, uid)
