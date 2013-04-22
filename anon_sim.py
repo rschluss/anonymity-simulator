@@ -550,7 +550,11 @@ class DynamicSplitting(AnonymitySimulator):
       for gid in range(len(self.round_keeper.group_round_keepers)):
         if gid == len(self.round_keeper.group_round_keepers) -1 or \
                  self.group_online[gid]:
+           
           for message in self.round_keeper.get_messages_for_group(gid)[:]:
+            if gid == len(self.round_keeper.group_round_keepers) - 1 and \
+                not self.is_member_online(message[2][0]):
+              continue
             if self.on_msg(message[0],message[2]):
               self.round_keeper.remove_message_from_group(message,gid)
               delivered[message[2][0]] = True
@@ -560,13 +564,15 @@ class DynamicSplitting(AnonymitySimulator):
                 msg_time = message[0] + self.round_time_span - \
 									(message[0] % self.round_time_span)
                 self.delayed_times.append(next_time - msg_time)
-
+          
           if gid == len(self.round_keeper.group_round_keepers) - 1:
             continue
+          
           self.round_keeper.end_group_round(gid)
           self.group_online[gid] = \
 				self.round_keeper.get_num_online_members_for_group(gid) \
-                                   				 == len(self.split_group[gid])
+                          				 == len(self.split_group[gid])
+        
         else:
           self.round_keeper.end_global_round_for_group(gid)
       
@@ -662,20 +668,18 @@ class DynamicSplitting(AnonymitySimulator):
     """ Handler for the client message post event """
 
     if not self.check_min_anon(uid):
-        print "insufficient anon"
         return False
 
     before = len(self.pseudonyms[uid].clients)
     before_group = self.pseudonyms[uid].clients
     group_idx = 0
-
     # Remove offline groups
     for online in self.group_online:
       if not online:
         for g_uid in self.split_group[group_idx]:
           self.clients[g_uid].remove_nym(uid)
           self.pseudonyms[uid].remove_client(g_uid)
-      group_idx += 1
+        group_idx += 1
 
     # Remove non-bootstrapped clients
     for client in self.offline_clients:
@@ -714,10 +718,9 @@ class DynamicSplitting(AnonymitySimulator):
             return False
     return True
     
-    #is this the correct behavior
   def is_member_group_online(self,uid):
       if uid not in self.splits:
-        return False
+        return True
       else:
         group_idx = self.splits[uid]
         return self.group_online[group_idx]

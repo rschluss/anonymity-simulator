@@ -18,7 +18,8 @@ class Round_Keeper:
                     Round_Keeper.Group_Round_Keeper(online_group))
     #add any ungrouped messages belonging to the group
     for message in self.get_messages_for_group(-1)[:]:
-      if message[2][0] in group: 
+      uid = message[2][0]
+      if uid in group: 
         self.remove_message_from_group(message,-1)
         self.add_message_to_group(-2,uid,message) 
   
