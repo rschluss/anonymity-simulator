@@ -29,11 +29,10 @@ class Round_Keeper:
     self.group_round_keepers[gid].remove_offline_member(member)
   
   def get_num_online_members_for_group(self,gid):
-    len(self.group_round_keepers[gid].online_members)
+    return len(self.group_round_keepers[gid].online_members)
   
   def get_num_round_members_for_group(self,gid):
-    len(self.group_round_keepers[gid].round_members)
-    print self.group_round_keepers[gid].round_members
+    return len(self.group_round_keepers[gid].round_members)
 
   def add_message_to_group(self,gid,uid,message):
     if gid == -1 or gid == len(self.group_round_keepers): 

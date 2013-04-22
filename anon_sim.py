@@ -567,10 +567,6 @@ class DynamicSplitting(AnonymitySimulator):
           self.group_online[gid] = \
 				self.round_keeper.get_num_online_members_for_group(gid) \
                                    				 == len(self.split_group[gid])
-          print "group %i" % gid
-          print len (self.split_group[gid])
-          print self.round_keeper.get_num_online_members_for_group(gid)
-        
         else:
           self.round_keeper.end_global_round_for_group(gid)
       
