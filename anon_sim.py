@@ -562,12 +562,18 @@ class DynamicSplitting(AnonymitySimulator):
                 self.delayed_times.append(next_time - msg_time)
 
           if gid == len(self.round_keeper.group_round_keepers) - 1:
-			continue
+            continue
           self.round_keeper.end_group_round(gid)
-          self.group_online[gid] = self.round_keeper.get_num_online_members_for_group(gid) \
-                                    == len(self.split_group[gid])
+          self.group_online[gid] = \
+				self.round_keeper.get_num_online_members_for_group(gid) \
+                                   				 == len(self.split_group[gid])
+          print "group %i" % gid
+          print len (self.split_group[gid])
+          print self.round_keeper.get_num_online_members_for_group(gid)
+        
+        else:
+          self.round_keeper.end_global_round_for_group(gid)
       
-      self.round_keeper.end_global_round()
       delayed_msgs = self.round_keeper.get_all_round_messages()
      
       
@@ -592,7 +598,7 @@ class DynamicSplitting(AnonymitySimulator):
   def on_join(self, etime, uid):
     """ Handler for the client join event """
     self.clients[uid].set_online(etime)
-
+    
     if uid not in self.splits:
       if uid not in self.join_queue:
         assert(uid in self.offline_clients)
@@ -606,16 +612,15 @@ class DynamicSplitting(AnonymitySimulator):
           group.append(g_uid)
         self.split_group.append(group)
         self.group_online.append(True)
-        self.join_queue = []
         self.round_keeper.add_group(group,group)
-		
+        self.join_queue = []
+        "some clients came online and I made them a group!"
     else:
       group_idx = self.splits[uid]
       self.round_keeper.add_online_member_to_group(uid,group_idx)
       if self.round_keeper.get_num_round_members_for_group(group_idx) == \
-                len(self.split_group):
+                len(self.split_group[group_idx]):
         self.group_online[group_idx] = True
-
 
   def on_quit(self, etime, uid):
     """ Handler for the client quit event """

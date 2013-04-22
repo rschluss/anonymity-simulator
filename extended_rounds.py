@@ -33,9 +33,13 @@ class Round_Keeper:
   
   def get_num_round_members_for_group(self,gid):
     len(self.group_round_keepers[gid].round_members)
+    print self.group_round_keepers[gid].round_members
 
   def add_message_to_group(self,gid,uid,message):
-    self.group_round_keepers[gid].add_message(uid,message)
+    if gid == -1 or gid == len(self.group_round_keepers): 
+      self.group_round_keepers[gid].messages.append(message)
+    else:	
+      self.group_round_keepers[gid].add_message(uid,message)
   
   def remove_message_from_group(self,message,gid):
     self.group_round_keepers[gid].remove_message(message)
@@ -47,9 +51,8 @@ class Round_Keeper:
     group_round_keeper = self.group_round_keepers[gid]	
     group_round_keeper.end_group_round()
   
-  def end_global_round(self):
-    for group_round_keeper in self.group_round_keepers:
-      group_round_keeper.end_global_round()
+  def end_global_round_for_group(self,gid):
+    self.group_round_keepers[gid].end_global_round()
   
   def get_all_round_messages(self):
     messages = []
@@ -72,15 +75,16 @@ class Round_Keeper:
       self.next_messages = []
 	
     def add_online_member(self,member):
-      self.online_members.append(member)
+      if member not in self.online_members:
+        self.online_members.append(member)
       if member not in self.new_round_members:
         self.new_round_members.append(member)
       if member not in self.round_members:
         self.round_members.append(member)
-		
+   
     def remove_offline_member (self,member):
-      self.online_members.remove(member)
-		
+       self.online_members.remove(member)	
+    
     def add_message(self,uid,event):
       if (uid in self.new_round_members):
         self.messages.append(event)
