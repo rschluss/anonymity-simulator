@@ -551,9 +551,8 @@ class DynamicSplitting(AnonymitySimulator):
         if gid == len(self.round_keeper.group_round_keepers) -1 or \
                  self.group_online[gid]:
           for message in self.round_keeper.get_messages_for_group(gid)[:]:
-            print "in loop"
-            if self.on_message(message[0],message[2]):
-              round_keeper.remove_message_from_group(message,gid)
+            if self.on_msg(message[0],message[2]):
+              self.round_keeper.remove_message_from_group(message,gid)
               delivered[message[2][0]] = True
               if message not in delayed_msgs:
                 self.on_time += 1

@@ -37,7 +37,7 @@ class Round_Keeper:
   def add_message_to_group(self,gid,uid,message):
     self.group_round_keepers[gid].add_message(uid,message)
   
-  def remove_message_from_group(self,gid,message):
+  def remove_message_from_group(self,message,gid):
     self.group_round_keepers[gid].remove_message(message)
     
   def get_messages_for_group(self,gid):
