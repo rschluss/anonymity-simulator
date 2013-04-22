@@ -488,6 +488,7 @@ class DynamicSplitting(AnonymitySimulator):
     self.offline_clients = []
     self.split_size = split_size
     self.member_online = {}
+    self.round_keeper = Round_Keeper()
 
   def run(self):
     for client in self.clients:
@@ -535,6 +536,8 @@ class DynamicSplitting(AnonymitySimulator):
             continue
           self.on_join(event[0], event[2])
         elif event[1] == "msg":
+          uid = event[2][0]
+          gid = self.splits[uid]
           self.round_keeper.add_message(event)
         elif event[1] == "quit":
           quit[event[2]] = event[0]
@@ -544,7 +547,7 @@ class DynamicSplitting(AnonymitySimulator):
       delivered = {}
       for gid in range(len(self.split_group)):
         if self.group_online[gid]:
-          for message in round_keeper.group_round_keepers[gid].messages
+          for message in round_keeper.get_messages_for_group(gid):
             round_keeper.remove_message_from_group(message,gid)
             if not self.on_msg(message[0], message[2]):
               self.round_keeper.add_message_to_next_round(uid)
@@ -604,7 +607,8 @@ class DynamicSplitting(AnonymitySimulator):
 		
     else:
       group_idx = self.splits[uid]
-      if  len(round_keeper.get_round_members_for_group(group_idx)) == len(self.split_group):
+      if  self.round_keeper.get_num_round_members_for_group(group_idx) == \
+                                                    len(self.split_group[group_idx]):
         self.group_online[group_idx] = True
 
 
@@ -637,8 +641,8 @@ class DynamicSplitting(AnonymitySimulator):
         self.split_group.append(group)
         self.group_online.append(False)
      
-       #TODO: check that doing filter correctly
-       self.round_keeper.add_group(filter(is_member_online,group))
+        #TODO: check that doing filter correctly
+        self.round_keeper.add_group(filter(self.is_member_online,group))
        
         for idx in group:
           for jdx in group:
@@ -649,7 +653,7 @@ class DynamicSplitting(AnonymitySimulator):
       self.round_keeper.remove_offline_member_from_group(uid,group_idx)
 
 
- def on_msg(self, etime, (uid, msg), tprint = False):
+  def on_msg(self, etime, (uid, msg), tprint = False):
     """ Handler for the client message post event """
 
     if not self.check_min_anon(uid):
