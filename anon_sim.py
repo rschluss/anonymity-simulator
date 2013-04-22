@@ -587,7 +587,8 @@ class DynamicSplitting(AnonymitySimulator):
 
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
-    self.lost_messages = delayed_msgs.extend(self.round_keeper.get_next_round_messages())
+    delayed_msgs.extend(self.round_keeper.get_next_round_messages())
+    self.lost_messages = delayed_msgs
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
