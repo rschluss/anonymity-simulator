@@ -537,34 +537,39 @@ class DynamicSplitting(AnonymitySimulator):
           self.on_join(event[0], event[2])
         elif event[1] == "msg":
           uid = event[2][0]
-          gid = self.splits[uid]
-          self.round_keeper.add_message(event)
+          gid = -1
+          if uid in self.splits:
+            gid = self.splits[uid]
+          self.round_keeper.add_message_to_group(gid,uid,event)
         elif event[1] == "quit":
           quit[event[2]] = event[0]
         else:
           assert(False)
 
       delivered = {}
-      for gid in range(len(self.split_group)):
-        if self.group_online[gid]:
-          for message in round_keeper.get_messages_for_group(gid):
-            round_keeper.remove_message_from_group(message,gid)
-            if not self.on_msg(message[0], message[2]):
-              self.round_keeper.add_message_to_next_round(uid)
-            else:
-              delivered[event[2][0]] = True
-              if event not in delayed_msgs:
+      for gid in range(len(self.round_keeper.group_round_keepers)):
+        if gid == len(self.round_keeper.group_round_keepers) -1 or \
+                 self.group_online[gid]:
+          for message in self.round_keeper.get_messages_for_group(gid)[:]:
+            print "in loop"
+            if self.on_message(message[0],message[2]):
+              round_keeper.remove_message_from_group(message,gid)
+              delivered[message[2][0]] = True
+              if message not in delayed_msgs:
                 self.on_time += 1
               else:
-                msg_time = msg[0] + self.round_time_span - (msg[0] % self.round_time_span)
+                msg_time = message[0] + self.round_time_span - \
+									(message[0] % self.round_time_span)
                 self.delayed_times.append(next_time - msg_time)
+
+          if gid == len(self.round_keeper.group_round_keepers) - 1:
+			continue
           self.round_keeper.end_group_round(gid)
-          self.group_online[gid] = round_keeper.get_num_online_members_for_group(gid) \
+          self.group_online[gid] = self.round_keeper.get_num_online_members_for_group(gid) \
                                     == len(self.split_group[gid])
       
       self.round_keeper.end_global_round()
       delayed_msgs = self.round_keeper.get_all_round_messages()
-      
      
       
       for nym in self.pseudonyms:
@@ -582,8 +587,7 @@ class DynamicSplitting(AnonymitySimulator):
 
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
-    self.lost_messages = msgs
-
+    self.lost_messages = delayed_msgs.extend(self.round_keeper.get_next_round_messages())
 
   def on_join(self, etime, uid):
     """ Handler for the client join event """
@@ -603,12 +607,13 @@ class DynamicSplitting(AnonymitySimulator):
         self.split_group.append(group)
         self.group_online.append(True)
         self.join_queue = []
-        self.round_keeper.add_group(group)
+        self.round_keeper.add_group(group,group)
 		
     else:
       group_idx = self.splits[uid]
-      if  self.round_keeper.get_num_round_members_for_group(group_idx) == \
-                                                    len(self.split_group[group_idx]):
+      self.round_keeper.add_online_member_to_group(uid,group_idx)
+      if self.round_keeper.get_num_round_members_for_group(group_idx) == \
+                len(self.split_group):
         self.group_online[group_idx] = True
 
 
@@ -641,8 +646,7 @@ class DynamicSplitting(AnonymitySimulator):
         self.split_group.append(group)
         self.group_online.append(False)
      
-        #TODO: check that doing filter correctly
-        self.round_keeper.add_group(filter(self.is_member_online,group))
+        self.round_keeper.add_group(group,filter(self.is_member_online,group))
        
         for idx in group:
           for jdx in group:
@@ -651,13 +655,14 @@ class DynamicSplitting(AnonymitySimulator):
       # Terminal splitting code
       group_idx = self.splits[uid]
       self.round_keeper.remove_offline_member_from_group(uid,group_idx)
-
+       
 
   def on_msg(self, etime, (uid, msg), tprint = False):
     """ Handler for the client message post event """
 
     if not self.check_min_anon(uid):
-      return False
+        print "insufficient anon"
+        return False
 
     before = len(self.pseudonyms[uid].clients)
     before_group = self.pseudonyms[uid].clients
@@ -698,7 +703,8 @@ class DynamicSplitting(AnonymitySimulator):
   def check_min_anon(self, uid):
     clients_offline = 0
     for client in self.clients:
-      if not self.is_member_group_online(client.uid):
+      if (client in self.splits and not self.is_member_group_online(client.uid)) or \
+                   (client not in self.splits and not self.is_member_online):
         if client.remove_if(uid) < self.min_anon:
           return False
         if client.uid in self.pseudonyms[uid].clients:

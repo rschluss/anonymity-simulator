@@ -8,12 +8,20 @@
 
 class Round_Keeper:	
   def __init__ (self):
-    self.group_round_keepers = []	
-	
-  def add_group(self,online_group):
-    self.group_round_keepers.append(\
+    
+    #initialize group_round_keepers with the "round_keeper" for the 
+    #ungrouped messages
+    self.group_round_keepers = [Round_Keeper.Group_Round_Keeper([])]	
+
+  def add_group(self,group,online_group):
+    self.group_round_keepers.insert(-1,\
                     Round_Keeper.Group_Round_Keeper(online_group))
-	
+    #add any ungrouped messages belonging to the group
+    for message in self.get_messages_for_group(-1)[:]:
+      if message[2][0] in group: 
+        self.remove_message_from_group(message,-1)
+        self.add_message_to_group(-2,uid,message) 
+  
   def add_online_member_to_group(self,member,gid):
     self.group_round_keepers[gid].add_online_member(member)
 	
@@ -28,7 +36,7 @@ class Round_Keeper:
 
   def add_message_to_group(self,gid,uid,message):
     self.group_round_keepers[gid].add_message(uid,message)
-	
+  
   def remove_message_from_group(self,gid,message):
     self.group_round_keepers[gid].remove_message(message)
     
@@ -37,7 +45,7 @@ class Round_Keeper:
 
   def end_group_round(self,gid):
     group_round_keeper = self.group_round_keepers[gid]	
-    self.group_round_keeper.end_group_round()
+    group_round_keeper.end_group_round()
   
   def end_global_round(self):
     for group_round_keeper in self.group_round_keepers:
@@ -48,7 +56,12 @@ class Round_Keeper:
     for group_round_keeper in self.group_round_keepers:
       messages.extend(group_round_keeper.messages)
     return messages
-		
+
+  def get_next_round_messages(self):
+    messages = []
+    for group_round_keeper in self.group_round_keepers:
+        messages.extend(group_round_keeper.next_messages)
+    return messages	
 	
   class Group_Round_Keeper:
     def __init__(self, online_group):
@@ -72,7 +85,7 @@ class Round_Keeper:
       if (uid in self.new_round_members):
         self.messages.append(event)
       else:
-        self.next_messages.append(event)
+        self.next_messages.append(event) 
     
     def remove_message(self,message):
       self.messages.remove(message)
@@ -81,9 +94,9 @@ class Round_Keeper:
       self.new_round_members = []
 
     def end_group_round(self):
-      self.round_members = online_members
-      self.new_round_members = online_members
-      self.messages.extend(next_messages)
+      self.round_members = self.online_members
+      self.new_round_members = self.online_members
+      self.messages.extend(self.next_messages)
       self.next_messages = []
           
 			
