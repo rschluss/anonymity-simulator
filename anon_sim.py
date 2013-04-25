@@ -546,15 +546,17 @@ class DynamicSplitting(AnonymitySimulator):
         else:
           assert(False)
 
+      #TODO: this could be more readable, and the logic clearer if
+      # extracted some stuff into seperate methods
       delivered = {}
       for gid in range(len(self.round_keeper.group_round_keepers)):
         if gid == len(self.round_keeper.group_round_keepers) -1 or \
                  self.group_online[gid]:
-           
           for message in self.round_keeper.get_messages_for_group(gid)[:]:
             if gid == len(self.round_keeper.group_round_keepers) - 1 and \
                 not self.is_member_online(message[2][0]):
               continue
+        
             if self.on_msg(message[0],message[2]):
               self.round_keeper.remove_message_from_group(message,gid)
               delivered[message[2][0]] = True
@@ -679,13 +681,12 @@ class DynamicSplitting(AnonymitySimulator):
         for g_uid in self.split_group[group_idx]:
           self.clients[g_uid].remove_nym(uid)
           self.pseudonyms[uid].remove_client(g_uid)
-        group_idx += 1
+      group_idx += 1
 
     # Remove non-bootstrapped clients
     for client in self.offline_clients:
       self.clients[client].remove_nym(uid)
       self.pseudonyms[uid].remove_client(client)
-
     if uid not in self.splits:
       return True
 
