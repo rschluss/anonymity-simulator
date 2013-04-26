@@ -11,18 +11,39 @@ class Round_Keeper:
     
     #initialize group_round_keepers with the "round_keeper" for the 
     #ungrouped messages
-    self.group_round_keepers = [Round_Keeper.Group_Round_Keeper([])]	
+    self.group_round_keepers = []
+    self.messages_from_offline_users = []	
 
   def add_group(self,group,online_group):
-    self.group_round_keepers.insert(-1,\
-                    Round_Keeper.Group_Round_Keeper(online_group))
+    self.group_round_keepers.append(\
+                 Round_Keeper.Group_Round_Keeper(online_group))
     #add any ungrouped messages belonging to the group
-    for message in self.get_messages_for_group(-1)[:]:
+    for message in self.get_messages_for_group(0)[:]:
       uid = message[2][0]
       if uid in group: 
-        self.remove_message_from_group(message,-1)
-        self.add_message_to_group(-2,uid,message) 
-  
+        self.remove_message_from_group(message,0)
+        self.add_message_to_group(-1,uid,message)
+        #TODO: Don't change algorithm 'til I check for bugs in the rest, but
+        # should probably add member to group round members if have a message
+        # and remove from new_round_members if that message was a delayed 
+        # message or something.  Should only really matter once policy changes
+   
+    #messages sent before the user was online
+    for message in self.messages_from_offline_users[:]:
+      uid = message [2][0]
+      if uid in group:
+        self.messages_from_offline_users.remove(message)
+        self.add_message_to_group(-2,uid,message)
+    
+    base_round_keeper = self.group_round_keepers[0]
+    for uid in group:
+        if uid in base_round_keeper.online_members:
+            base_round_keeper.online_members.remove(uid)
+        if uid in base_round_keeper.round_members:
+            base_round_keeper.round_members.remove(uid)
+        if uid in base_round_keeper.new_round_members:
+            base_round_keeper.new_round_members.remove(uid)
+
   def add_online_member_to_group(self,member,gid):
     self.group_round_keepers[gid].add_online_member(member)
 	
@@ -35,12 +56,11 @@ class Round_Keeper:
   def get_num_round_members_for_group(self,gid):
     return len(self.group_round_keepers[gid].round_members)
 
-  def add_message_to_group(self,gid,uid,message):
-    if gid == -1 or gid == len(self.group_round_keepers): 
-      self.group_round_keepers[gid].messages.append(message)
-    else:	
-      self.group_round_keepers[gid].add_message(uid,message)
-  
+  def add_message_to_group(self,gid,uid,message):	
+    self.group_round_keepers[gid].add_message(uid,message)
+ 
+  def add_message_from_offline_user(self,message):
+    self.messages_from_offline_users.append(message)
   def remove_message_from_group(self,message,gid):
     self.group_round_keepers[gid].remove_message(message)
     
@@ -60,9 +80,10 @@ class Round_Keeper:
       messages.extend(group_round_keeper.messages)
     return messages
 
-  def get_next_round_messages(self):
-    messages = []
+  def get_all_messages(self):
+    messages = self.messages_from_offline_users
     for group_round_keeper in self.group_round_keepers:
+        messages.extend(group_round_keeper.messages)
         messages.extend(group_round_keeper.next_messages)
     return messages	
 	
