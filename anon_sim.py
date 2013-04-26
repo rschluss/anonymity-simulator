@@ -104,7 +104,15 @@ def main():
         start_time = args.start,
         trainer = args.trainer,
         split_size = args.split_size)
-
+  elif args.policy == "extended_rounds":
+    anon_sim = DynamicSplitting(total, msg_parser.events,
+        min_anon = args.min_anon,
+        pseudonyms_per_client = args.pseudonyms_per_client,
+        round_time_span = args.round_time_span,
+        start_time = args.start,
+        trainer = args.trainer,
+        split_size = args.split_size)
+ 
   anon_sim.run()
 
   total_clients = total 
