@@ -509,7 +509,7 @@ class DynamicSplitting(AnonymitySimulator):
 		self.splits[client.uid] = 0
     self.split_group.append(group)
     self.group_online.append(True)
-    self.round_keeper.add_group(group,group)
+    self.round_keeper.add_group(group[:],group[:])
     AnonymitySimulator.run(self)
 
   def is_member_online(self, uid):
@@ -599,7 +599,8 @@ class DynamicSplitting(AnonymitySimulator):
     # No more join / quit events and there are still message posting events
     # add these to lost messages and break
     self.lost_messages = self.round_keeper.get_all_messages()
-
+    print self.split_group
+    
   def on_join(self, etime, uid):
     """ Handler for the client join event """
     self.clients[uid].set_online(etime)
@@ -617,7 +618,7 @@ class DynamicSplitting(AnonymitySimulator):
           group.append(g_uid)
         self.split_group.append(group)
         self.group_online.append(True)
-        self.round_keeper.add_group(group,group)
+        self.round_keeper.add_group(group[:],group[:])
         self.join_queue = []
         "some clients came online and I made them a group!"
     else:
@@ -655,7 +656,7 @@ class DynamicSplitting(AnonymitySimulator):
       self.split_group.append(group)
       self.split_group[0] = [i for i in self.split_group[0] if i not in group]
       self.group_online.append(False)
-      self.round_keeper.add_group(group,filter(self.is_member_online,group))
+      self.round_keeper.add_group(group[:],filter(self.is_member_online,group))
        
       for idx in group:
         for jdx in group:
