@@ -85,9 +85,9 @@ class Round_Keeper:
 	
   class Group_Round_Keeper:
     def __init__(self, online_group):
-      self.online_members = online_group
-      self.round_members = online_group
-      self.new_round_members = online_group
+      self.online_members = online_group[:]
+      self.round_members = online_group[:]
+      self.new_round_members = online_group[:]
       self.messages = []
       self.next_messages = []
 	

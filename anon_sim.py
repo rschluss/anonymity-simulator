@@ -639,7 +639,8 @@ class DynamicSplitting(AnonymitySimulator):
     elif self.splits[uid] == 0:
       clients = []
       for client in self.clients:
-        if client.uid in self.splits  and  self.splits[client.uid] == 0:
+        if client.uid in self.splits  and  self.splits[client.uid] == 0 \
+                and client.uid != uid:
           clients.append(client)
 
       clients.sort(key=lambda client: client.get_online_time(etime))
