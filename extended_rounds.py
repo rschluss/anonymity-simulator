@@ -40,10 +40,8 @@ class Round_Keeper:
 
   def add_online_member_to_group(self,member,gid):
     self.group_round_keepers[gid].add_online_member(member)
-	
   def remove_offline_member_from_group(self,member,gid):
     self.group_round_keepers[gid].remove_offline_member(member)
- 
   def get_num_online_members_for_group(self,gid):
     return len(self.group_round_keepers[gid].online_members)
   
@@ -78,10 +76,8 @@ class Round_Keeper:
   def get_all_messages(self):
     messages = self.messages_from_offline_users [:]
     for group_round_keeper in self.group_round_keepers:
-        if len(group_round_keeper.messages) > 0:
-          messages.extend(group_round_keeper.messages)
-        if len(group_round_keeper.next_messages) > 0:
-          messages.extend(group_round_keeper.next_messages)
+      messages.extend(group_round_keeper.messages)
+      messages.extend(group_round_keeper.next_messages)
     return messages	
 	
   class Group_Round_Keeper:

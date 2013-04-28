@@ -497,6 +497,7 @@ class DynamicSplitting(AnonymitySimulator):
     self.split_size = split_size
     self.member_online = {}
     self.round_keeper = Round_Keeper()
+
   def run(self):
     group = []
     for client in self.clients:
@@ -538,6 +539,7 @@ class DynamicSplitting(AnonymitySimulator):
       
       quit = {}
       join_event = False
+
       delayed_msgs = self.round_keeper.get_all_round_messages()
 
       while len(events) > 0 and events[-1][0] < next_time:
@@ -580,8 +582,6 @@ class DynamicSplitting(AnonymitySimulator):
             assert (gid != 0)
         else:
           self.round_keeper.end_global_round_for_group(gid)
-        
-          
 
  
       for nym in self.pseudonyms:
