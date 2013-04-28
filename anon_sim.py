@@ -582,7 +582,6 @@ class DynamicSplitting(AnonymitySimulator):
             assert (gid != 0)
         else:
           self.round_keeper.end_global_round_for_group(gid)
-
  
       for nym in self.pseudonyms:
         if nym.uid in delivered:
