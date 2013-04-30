@@ -123,21 +123,32 @@ def main():
   print "Delivered messages: %s" % (anon_sim.on_time, )
   print "Delayed messages: %s" % (len(anon_sim.delayed_times), )
   print "Lost messages: %s" % (len(anon_sim.lost_messages), )
-  print "Delays: %s" % (anon_sim.delayed_times)
+  
+#  print "Delays: %s" % (anon_sim.delayed_times)
+  avg_delay = 0
+  std_dev = 0
+  if len(anon_sim.delayed_times)> 0:
+    avg_delay = sum(anon_sim.delayed_times)/len(anon_sim.delayed_times)
+    var_list = [(i-avg_delay) ** 2 for i in anon_sim.delayed_times]
+    varience = sum(var_list)/len(var_list)
+    std_dev = math.sqrt(varience)  
 
+  print "Average Delay: %f" % avg_delay
+  print "Standard Deviation of Delays: %f" % std_dev 
+  
   to_print = []
   for client in anon_sim.clients:
     if(total_pseudonyms == len(client.pseudonyms)):
       continue
     to_print.append(len(client.pseudonyms))
-  print "Clients: %s" % (to_print,)
+  #print "Clients: %s" % (to_print,)
 
   to_print = []
   for pseudonym in anon_sim.pseudonyms:
     if(total_clients == len(pseudonym.clients)):
       continue
     to_print.append(len(pseudonym.clients))
-  print "Pseudonyms: %s" % (to_print,)
+ # print "Pseudonyms: %s" % (to_print,)
 
   to_print = []
   result = {}
@@ -212,18 +223,18 @@ def main():
         result[to_swap] = next_idx
         change = True
 
-  print "Pseudonyms' Ranks: "
+#  print "Pseudonyms' Ranks: "
   found0 = 0
   found1 = 0
   for top in to_print:
     found0_0 = top[0] == top[1]
     found1_0 = result[top[0]] == top[0]
-    print "\t%s -- %s -- %s -- %s" % (found0_0, found1_0, top, result[top[0]])
+ #   print "\t%s -- %s -- %s -- %s" % (found0_0, found1_0, top, result[top[0]])
     if found1_0:
       found1 += 1
     if found0_0:
       found0 += 1
-  print "Found: %s -- %s" % (found0, found1)
+  #print "Found: %s -- %s" % (found0, found1)
 
   if args.output:
     output = open(args.output, "w+")
